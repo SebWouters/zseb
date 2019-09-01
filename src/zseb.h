@@ -24,30 +24,20 @@
 #include <fstream>
 #include <string>
 
-#define ZSEB_HIST     32768 // 2 ** ZSEB_HIST_BIT
+#define ZSEB_HIST     32768    // 2 ** ZSEB_HIST_BIT
 #define ZSEB_HIST_BIT 15
-#define ZSEB_NCHR     256   // 2 ** ZSEB_NCHR_BIT; there is an alphabet of 256 characters
+#define ZSEB_NCHR     256      // 2 ** ZSEB_NCHR_BIT; there is an alphabet of 256 characters
 #define ZSEB_NCHR_BIT 8
-#define ZSEB_HSH_SIZE 16777216
+#define ZSEB_HSH_SIZE 16777216 // 256 * 256 * 256
 
-#define ZSEB_READ_FWD 1024
-#define ZSEB_RD_SIZE  34816 // ZSEB_HIST + 2 * ZSEB_READ_FWD
+#define ZSEB_READ_FWD 16384
+#define ZSEB_RD_SIZE  65536    // ZSEB_HIST + 2 * ZSEB_READ_FWD
 
 #define ZSEB_HSH_STOP ( ~( ( unsigned int )( 0 ) ) )
 
 #define ZSEB_HEAD_BIT 8
-#define ZSEB_HEAD_SFT 3     // LZSS: Only if length >= 3 string is replaced
-#define ZSEB_HEAD     258   // [ 0 : 2 ^ (ZSEB_HEAD_BIT) ] + ZSEB_HEAD_SFT
-
-//#include <limits.h>
-
-//#define ubase_t  unsigned int
-//#define ucarry_t unsigned long long
-
-//#define BLOCK_BIT ( sizeof( unsigned int ) * CHAR_BIT )
-//#define BASE_UNIT 256
-
-//#define __11111111__ ( ~( ( unsigned int )( 0 ) ) )
+#define ZSEB_HEAD_SFT 3        // LZSS: Only if length >= 3 string is replaced
+#define ZSEB_HEAD     258      // [ 0 : 2 ** ZSEB_HEAD_BIT ] + ZSEB_HEAD_SFT
 
 namespace zseb{
 

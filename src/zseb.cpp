@@ -18,13 +18,7 @@
 */
 
 #include <assert.h>
-//#include <math.h>
-
 #include "zseb.h"
-
-//int jans::big_int::NUM_BLOCK = 0;
-
-//bool jans::big_int::nb_set = false;
 
 zseb::zseb::zseb( std::string toread ){
 
@@ -34,7 +28,6 @@ zseb::zseb::zseb( std::string toread ){
       size = ( unsigned long )( infile.tellg() );
       infile.seekg( 0, std::ios::beg );
       std::cout << "Opened " << toread << " with size " << size << "." << std::endl;
-      //std::cout << "ZSEB_HSH_STOP = " << ZSEB_HSH_STOP << std::endl;
 
       readframe = new char[ ZSEB_RD_SIZE ];
       rd_shift = 0;
@@ -105,12 +98,9 @@ void zseb::zseb::__write_infile_test__(){
 
    while ( rd_current < rd_end - 2 ) {
 
-      //std::cout << "[readframe(" << rd_shift << ") = " << readframe[ rd_current ] << readframe[ rd_current + 1 ] << readframe[ rd_current + 2 ] << "]" << std::endl;
-
-      //std::cout << readframe[ rd_current ];
       unsigned long entry = ( unsigned char )( readframe[ rd_current + 2 ] );
-      entry = ( entry << ZSEB_NCHR_BIT ) + ( unsigned char )( readframe[ rd_current + 1 ] );
-      entry = ( entry << ZSEB_NCHR_BIT ) + ( unsigned char )( readframe[ rd_current ] );
+      entry = ( entry << ZSEB_NCHR_BIT ) | ( unsigned char )( readframe[ rd_current + 1 ] );
+      entry = ( entry << ZSEB_NCHR_BIT ) | ( unsigned char )( readframe[ rd_current ] );
 
       unsigned int pointer = hash_last[ entry ];
       unsigned int longest_ptr = ZSEB_HSH_STOP;
@@ -129,7 +119,6 @@ void zseb::zseb::__write_infile_test__(){
             longest_len = length;
             longest_ptr = pointer;
          }
-         //std::cout << "[readframe(" << pointer << ") = " << readframe[ pointer ] << readframe[ pointer + 1 ] << readframe[ pointer + 2 ] << " ]" << std::endl;
          pointer = hash_ptrs[ pointer ];
       }
 
@@ -149,7 +138,7 @@ void zseb::zseb::__write_infile_test__(){
       unsigned int counter = 1;
       while ( counter < longest_len ){
          unsigned long temp = ( unsigned char )( readframe[ rd_current + 2 ] );
-         entry = ( entry >> ZSEB_NCHR_BIT ) + ( temp << ( 2 * ZSEB_NCHR_BIT ) );
+         entry = ( entry >> ZSEB_NCHR_BIT ) | ( temp << ( 2 * ZSEB_NCHR_BIT ) );
          hash_ptrs[ rd_current ] = hash_last[ entry ];
          hash_last[ entry ] = rd_current;
          rd_current += 1;
@@ -158,7 +147,6 @@ void zseb::zseb::__write_infile_test__(){
 
       if ( ( rd_end == ZSEB_RD_SIZE ) && ( rd_current > ( ZSEB_HIST + ZSEB_READ_FWD ) ) ){
          __readin__( ZSEB_READ_FWD );
-         //std::cout << "[shift_left " << ZSEB_READ_FWD << "]";
       }
 
    }

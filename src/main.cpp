@@ -19,9 +19,9 @@
 
 #include "zseb.h"
 
-int main () {
+int main(){
 
-   zseb::zseb( "bible.txt" );
+   zseb::zseb( "tests/bible.txt" );
 
    return 0;
 
