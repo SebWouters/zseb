@@ -24,20 +24,26 @@
 #include <fstream>
 #include <string>
 
-#define ZSEB_HIST     32768    // 2 ** ZSEB_HIST_BIT
-#define ZSEB_HIST_BIT 15
-#define ZSEB_NCHR     256      // 2 ** ZSEB_NCHR_BIT; there is an alphabet of 256 characters
-#define ZSEB_NCHR_BIT 8
-#define ZSEB_HSH_SIZE 16777216 // 256 * 256 * 256
+#define ZSEB_BUFFER       131072U   // 2^ZSEB_BUFFER_BIT
+#define ZSEB_BUFFER_BIT   17
+#define ZSEB_SHIFT        65536U    // 2^ZSEB_SHIFT_BIT
+#define ZSEB_SHIFT_BIT    16        // ZSEB_SHIFT_BIT == ZSEB_BUFFER_BIT - 1
+#define ZSEB_HISTORY      32768U    // 2^ZSEB_HISTORY_BIT
+#define ZSEB_HISTORY_BIT  15        // ZSEB_HISTORY_BIT < ZSEB_SHIFT_BIT
+#define ZSEB_NUM_CHAR     256U      // 2^ZSEB_NUM_CHAR_BIT; there is an alphabet of 256 characters
+#define ZSEB_NUM_CHAR_BIT 8
 
-#define ZSEB_READ_FWD 16384
-#define ZSEB_RD_SIZE  65536    // ZSEB_HIST + 2 * ZSEB_READ_FWD
+#define ZSEB_READ_TRIGGER 130048U   // 2^ZSEB_BUFFER_BIT - 1024
 
-#define ZSEB_HSH_STOP ( ~( ( unsigned int )( 0 ) ) )
+#define ZSEB_HASH_SIZE    16777216U // ZSEB_NUM_CHAR ** 3
+#define ZSEB_HASH_MASK    16777215U // ZSEB_NUM_CHAR ** 3 - 1
+#define ZSEB_HASH_STOP    ( ~( ( unsigned int )( 0 ) ) )
 
-#define ZSEB_HEAD_BIT 8
-#define ZSEB_HEAD_SFT 3        // LZSS: Only if length >= 3 string is replaced
-#define ZSEB_HEAD     258      // [ 0 : 2 ** ZSEB_HEAD_BIT ] + ZSEB_HEAD_SFT
+#define ZSEB_STR_LEN      258U      // [ 0 : 2 ** ZSEB_STR_LEN_BIT ] + ZSEB_STR_LEN_SHFT
+#define ZSEB_STR_LEN_BIT  8
+#define ZSEB_STR_LEN_SHFT 3         // LZSS: Only if length >= 3 string is replaced
+
+#define ZSEB_SANITY_CHECK ( 1UL << 24 )
 
 namespace zseb{
 
@@ -54,26 +60,6 @@ namespace zseb{
       * Uses the second format if length < 3.
       * Huffman code the positions, lengths and chars.
       * Non greedy: possibly use shorter match so that next match is better.
-      * Use a hash table to store the dictionary.
-         – Hash keys are all strings of length 3 in the dictionary window.
-         – Find the longest match within the correct hash bucket.
-         – Puts a limit on the length of the search within a bucket.
-         – Within each bucket store in order of position (latest first).
-      * The Hash Table:
-           .. 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 ..
-           .. a a c a  a  c  a  b  c  a  b  a  a  a  c  ..
-           table[aac] --> 19 --> 10 --> 7
-      * Max position / history window = 2^15 = 32768 char = 32 KB
-      * Max length = 258 bytes ---> [0 - 255] + 3 (min. length) = [3 - 258]
-      * Hash table --> max position = 2**15
-                   --> pointers of max size 2**16?
-                   --> Use differential pointers? / Shift each block?
-                   --> table[aac] --> 19 MOD 2**16?
-      * Hash table --> [ length (2**8 (char))**3 = 16777216 entries ] * 2 byte / PTR = 32 MB
-      * unsigned int contains at least the [0 - 65535] range
-      * Hash table --> table[a][a][c] ?
-
-      * ini_map[aac] --> pointer_array
 
 */
 
@@ -91,9 +77,9 @@ namespace zseb{
 
          std::ifstream infile;
 
-         unsigned long size; // number of bytes in infile
+         unsigned long size;       // Number of bytes in infile
 
-         char * readframe; // length ZSEB_RD_SIZE; snippet from infile --> [ rd_shift : rd_shift + rd_end ]
+         char * readframe;         // Length ZSEB_BUFFER; snippet from infile --> [ rd_shift : rd_shift + rd_end ]
 
          unsigned long rd_shift;   // Current starting point of readframe
 
@@ -101,16 +87,23 @@ namespace zseb{
 
          unsigned int  rd_current; // Current position within readframe
 
-         void __readin__( const unsigned int shift_left ); // Shift readframe and fill rest
-
-         void __write_infile_test__();
-
          /***  Hash table  ***/
 
-         unsigned int * hash_last; // hash_last[a][a][c] = hash_last[ a + 256 * ( a + 256 * c ) ] = index latest encounter (w.r.t. readframe); STOP = ZSEB_HSH_STOP
+         unsigned int * hash_last; // hash_last['abc'] = hash_last[ c + 256 * ( b + 256 * a ) ] = index latest encounter (w.r.t. readframe); STOP = ZSEB_HASH_STOP
 
-         unsigned int * hash_ptrs; // hash_ptrs[ index ] = index' = index of encounter before index ( length ZSEB_RD_SIZE )
+         unsigned int * hash_ptrs; // hash_ptrs[ index ] = index' = index of encounter before index ( length ZSEB_BUFFER )
 
+         /***  Functions  ***/
+
+         void __readin__();
+
+         void __shift_left__();    // Shift readframe, hash_last and hash_ptrs
+
+         void __move_up__( unsigned int hash_entry ); // Add hash_entry & rd_current to hash; increment rd_current
+
+         void __longest_match__( unsigned int * l_ptr, unsigned int * l_len, const unsigned int hash_entry, const unsigned int position ) const;
+
+         void __write_infile_test__();
 
    };
 
