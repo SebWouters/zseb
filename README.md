@@ -1,5 +1,5 @@
-zseb: compression
-=================
+zseb: Zipping Sequences of Encountered Bytes
+============================================
 
 Copyright (C) 2019 Sebastian Wouters <sebastianwouters@gmail.com>
 
@@ -20,5 +20,36 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 Information
 -----------
 
+Work in progess.
+
+A GZIP/DEFLATE compatible implementation (in progress).
+
 Playing around.
+
+Documentation
+-------------
+
+   - Gailly, **Algoritm and GZIP file format**,
+     <https://git.savannah.gnu.org/cgit/gzip.git/tree/algorithm.doc>
+
+   - Deutsch, **DEFLATE Compressed Data Format Specification**
+     version 1.3 (May 1996), <https://www.ietf.org/rfc/rfc1951.txt>
+
+   - Deutsch, **GZIP File Format Specification** version 4.3
+     (May 1996), <https://www.ietf.org/rfc/rfc1952.txt>
+
+   - Davies, **Dissecting the GZIP format** (24 April 2011),
+     <http://www.infinitepartitions.com/art001.html>: comprehensive
+     explanation of the DEFLATE and GZIP file formats
+
+   - Salomon and Motta, **Handbook of Data Compression**, 5th edition,
+     Springer-Verlag London (2010), section 6.25, pages 399 to 410,
+     <https://doi.org/10.1007/978-1-84882-903-9>: comprehensive
+     explanation of the DEFLATE and GZIP file formats
+
+   - Hankerson, Harris and Johnson, **Introduction to Information
+     Theory and Data Compression**, 2nd edition, CRC Press (2003),
+     section 9.1.2, pages 235 to 236,
+     <https://dl.acm.org/citation.cfm?id=601218>: settles ambiguity
+     on lazy evaluation
 

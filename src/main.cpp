@@ -1,5 +1,5 @@
 /*
-   zseb: compression
+   zseb: Zipping Sequences of Encountered Bytes
    Copyright (C) 2019 Sebastian Wouters
 
    This program is free software; you can redistribute it and/or modify
@@ -21,7 +21,7 @@
 
 int main(){
 
-   zseb::zseb( "tests/bible.txt" );
+   zseb::zseb( "tests/bible.txt", "dump.zseb", 'Z' );
 
    return 0;
 

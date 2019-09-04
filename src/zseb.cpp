@@ -1,5 +1,5 @@
 /*
-   zseb: compression
+   zseb: Zipping Sequences of Encountered Bytes
    Copyright (C) 2019 Sebastian Wouters
 
    This program is free software; you can redistribute it and/or modify
@@ -21,9 +21,12 @@
 #include <limits.h>
 #include "zseb.h"
 
-zseb::zseb::zseb( std::string toread ){
+zseb::zseb::zseb( std::string toread, std::string towrite, const char unzip ){
 
    assert( UINT_MAX >= ZSEB_SANITY_CHECK );
+   assert( ( unzip == 'Z' ) || ( unzip == 'U' ) );
+
+   modus = unzip;
 
    infile.open( toread.c_str(), std::ios::in|std::ios::binary|std::ios::ate );
    if ( infile.is_open() ){
@@ -31,25 +34,17 @@ zseb::zseb::zseb( std::string toread ){
       size = ( unsigned long )( infile.tellg() );
       infile.seekg( 0, std::ios::beg );
       std::cout << "Opened " << toread << " with size " << size << "." << std::endl;
-      assert( size > 8UL );
+      assert( size > 8UL ); // TODO: include case size <= 8UL
 
-      readframe = new char[ ZSEB_BUFFER ];
-      rd_shift = 0;
-      rd_end = 0;
-      rd_current = 0;
+    //outfile.open( towrite.c_str(), std::ios::out|std::ios::binary|std::ios::trunc );
 
-      hash_last = new unsigned int[ ZSEB_HASH_SIZE ];
-      hash_ptrs = new unsigned int[ ZSEB_BUFFER ];
-      for ( unsigned int cnt = 0; cnt < ZSEB_HASH_SIZE; cnt++ ){ hash_last[ cnt ] = ZSEB_HASH_STOP; }
-      for ( unsigned int cnt = 0; cnt < ZSEB_BUFFER;    cnt++ ){ hash_ptrs[ cnt ] = ZSEB_HASH_STOP; }
-
-      __readin__();
-      __write_infile_test__();
+      if ( unzip == 'Z' ){   __zip__(); }
+    //if ( unzip == 'U' ){ __unzip__(); }
 
    } else {
 
       size = 0;
-      std::cout << "Unable to open " << toread << "." << std::endl;
+      std::cout << "zseb: Unable to open " << toread << "." << std::endl;
       readframe = NULL;
       rd_shift = 0;
       rd_end = 0;
@@ -61,9 +56,27 @@ zseb::zseb::zseb( std::string toread ){
 
 }
 
+void zseb::zseb::__zip__(){
+
+   readframe = new char[ ZSEB_BUFFER ];
+   rd_shift = 0;
+   rd_end = 0;
+   rd_current = 0;
+
+   hash_last = new unsigned int[ ZSEB_HASH_SIZE ];
+   hash_ptrs = new unsigned int[ ZSEB_BUFFER ];
+   for ( unsigned int cnt = 0; cnt < ZSEB_HASH_SIZE; cnt++ ){ hash_last[ cnt ] = ZSEB_HASH_STOP; }
+   for ( unsigned int cnt = 0; cnt < ZSEB_BUFFER;    cnt++ ){ hash_ptrs[ cnt ] = ZSEB_HASH_STOP; }
+
+   __readin__();
+   __write_infile_test__();
+
+}
+
 zseb::zseb::~zseb(){
 
-   if ( infile.is_open() ){ infile.close(); }
+   if (  infile.is_open() ){  infile.close(); }
+ //if ( outfile.is_open() ){ outfile.close(); }
    if ( readframe != NULL ){ delete [] readframe; }
    if ( hash_ptrs != NULL ){ delete [] hash_ptrs; }
    if ( hash_last != NULL ){ delete [] hash_last; }
@@ -180,6 +193,17 @@ void zseb::zseb::__write_infile_test__(){
          __readin__();
       }
 
+   }
+
+   if ( rd_current == rd_end - 3 ){ // mem[ rd_end - 3, rd_end - 2, rd_end - 1 ] may be last triplet
+
+      longest_ptr0 = hash_last[ hash_entry ];
+      if ( ( longest_ptr0 != ZSEB_HASH_STOP ) && ( longest_ptr0 + ZSEB_HISTORY >= rd_current ) ){
+         longest_len0 = 3;
+         for ( unsigned int cnt = 0; cnt < longest_len0; cnt++ ){ std::cout << readframe[ longest_ptr0 + cnt ]; }
+         // No longer update the hash_ptrs and hash_last
+         rd_current += longest_len0;
+      }
    }
 
    while ( rd_current < rd_end ){

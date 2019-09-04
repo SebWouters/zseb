@@ -1,5 +1,5 @@
 /*
-   zseb: compression
+   zseb: Zipping Sequences of Encountered Bytes
    Copyright (C) 2019 Sebastian Wouters
 
    This program is free software; you can redistribute it and/or modify
@@ -47,31 +47,19 @@
 
 namespace zseb{
 
-/*
-
-   http://www.cplusplus.com/doc/tutorial/files/
-   https://git.savannah.gnu.org/cgit/gzip.git/tree/algorithm.doc
-   https://www2.cs.duke.edu/courses/spring11/cps296.3/compression4.pdf
-   https://www.ietf.org/rfc/rfc1952.txt
-
-   Optimizations used by gzip:
-      * LZSS: Output one of the following two formats:
-           (0, position, length) or (1, char)
-      * Uses the second format if length < 3.
-      * Huffman code the positions, lengths and chars.
-      * Non greedy: possibly use shorter match so that next match is better.
-
-*/
-
    class zseb{
 
       public:
 
-         zseb( std::string toread );
+         zseb( std::string toread, std::string towrite, const char unzip );
 
          virtual ~zseb();
 
       private:
+
+         char modus;
+
+         void __zip__();
 
          /***  File to compress  ***/
 
