@@ -76,6 +76,7 @@ void zseb::zseb::__fill_map_len__(){
 zseb::zseb::zseb( std::string toread, std::string towrite, const char unzip ){
 
    assert( UINT_MAX >= ZSEB_SANITY_CHECK );
+   // TODO: define zseb_hash_t and zseb_dist_t as minimal native types with a representation of a number > 2^24 (unsigned int?) and > 2^15 (unsigned short?) respectively
    assert( ( unzip == 'Z' ) || ( unzip == 'U' ) );
 
    modus = unzip;
@@ -233,7 +234,7 @@ void zseb::zseb::__append_lit_encode__(){
 
    const unsigned char code = ( unsigned char )( readframe[ rd_current ] );
    //buffer  [ wr_current ] = code;
-   //distance[ wr_current ] = 0;
+   //distance[ wr_current ] = ZSEB_HASH_STOP;
    stat_lit[ code ] += 1; // [ 0 - 255 ]
    //wr_current += 1;
 

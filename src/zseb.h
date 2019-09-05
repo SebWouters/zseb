@@ -35,15 +35,15 @@
 
 #define ZSEB_READ_TRIGGER 130048U   // 2^ZSEB_BUFFER_BIT - 1024
 
-#define ZSEB_HASH_SIZE    16777216U // ZSEB_NUM_CHAR ** 3
-#define ZSEB_HASH_MASK    16777215U // ZSEB_NUM_CHAR ** 3 - 1
+#define ZSEB_HASH_SIZE    16777216U // ZSEB_NUM_CHAR ^ 3
+#define ZSEB_HASH_MASK    16777215U // ZSEB_NUM_CHAR ^ 3 - 1
 #define ZSEB_HASH_STOP    ( ~( ( unsigned int )( 0 ) ) )
 
-#define ZSEB_STR_LEN      258U      // [ 0 : 2 ** ZSEB_STR_LEN_BIT ] + ZSEB_STR_LEN_SHFT
+#define ZSEB_STR_LEN      258U      // [ 0 : 2 ^ ZSEB_STR_LEN_BIT ] + ZSEB_STR_LEN_SHFT
 #define ZSEB_STR_LEN_BIT  8
 #define ZSEB_STR_LEN_SHFT 3         // LZSS: Only if length >= 3 string is replaced
 
-#define ZSEB_HUF1         288U      // 0-255 lit; 256 stop; 257-285 len; 286 and 287 unused
+#define ZSEB_HUF1         286U      // 0-255 lit; 256 stop; 257-285 len; 286 and 287 unused
 #define ZSEB_HUF2         30U       // 0-29 dist
 
 #define ZSEB_SANITY_CHECK ( 1UL << 24 )
@@ -64,7 +64,7 @@ namespace zseb{
 
          void __zip__();
 
-         /***  HUFFMAN TREE INFO  ***/
+         /***  HUFFMAN TREE STATICS  ***/
 
          unsigned char map_len[ 256 ]; // For zipping: code = 257 + map_len[ length - 3 ];
 
@@ -104,15 +104,15 @@ namespace zseb{
 
          unsigned long long zlib;  // Number of bits with GZIP encoding, headed excluded
 
-         unsigned char * buffer;   // Length ZSEB_SHIFT; lit / ( len - 3 )
+         unsigned char * buffer;   // Length ZSEB_SHIFT; contains lit OR len_shift = length - 3
 
-         unsigned int * distance;  // Length ZSEB_SHIFT; dist where 0 means lit
+         unsigned int * distance;  // Length ZSEB_SHIFT; contains dist_shift, where ZSEB_HASH_STOP means lit
 
          unsigned int wr_current;  // Currently validly filled length of distance & buffer
 
-         unsigned int * stat_lit;  // Length ZSEB_HUF1 --> counts lit/len encounters
+         unsigned int * stat_lit;  // Length ZSEB_HUF1 --> counts lit/len code encounters
 
-         unsigned int * stat_dist; // Length ZSEB_HUF2 --> counts dist encounters
+         unsigned int * stat_dist; // Length ZSEB_HUF2 --> counts dist code encounters
 
          /***  Hash table  ***/
 
@@ -132,7 +132,7 @@ namespace zseb{
 
          inline void __append_lit_encode__();
 
-         inline void __append_len_encode__( const unsigned int dist_shift, const unsigned int length );
+         inline void __append_len_encode__( const unsigned int dist_shift, const unsigned int len_shift );
 
          void __lzss_encode__();
 
