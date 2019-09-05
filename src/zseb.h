@@ -43,6 +43,9 @@
 #define ZSEB_STR_LEN_BIT  8
 #define ZSEB_STR_LEN_SHFT 3         // LZSS: Only if length >= 3 string is replaced
 
+#define ZSEB_HUF1         288U      // 0-255 lit; 256 stop; 257-285 len; 286 and 287 unused
+#define ZSEB_HUF2         30U       // 0-29 dist
+
 #define ZSEB_SANITY_CHECK ( 1UL << 24 )
 
 namespace zseb{
@@ -61,11 +64,31 @@ namespace zseb{
 
          void __zip__();
 
-         /***  File to compress  ***/
+         /***  HUFFMAN TREE INFO  ***/
+
+         unsigned char map_len[ 256 ]; // For zipping: code = 257 + map_len[ length - 3 ];
+
+         void __fill_map_len__();
+
+         static const unsigned char bit_len[ 29 ]; // For unzipping
+
+         static const unsigned int  add_len[ 29 ]; // For unzipping
+
+         unsigned char map_dist[ 512 ]; // For zipping: shift = distance - 1; code = ( shift < 256 ) ? map_dist[ shift ] : map_dist[ 256 ^ ( shift >> 7 ) ];
+
+         void __fill_map_dist__();
+
+         static const unsigned char bit_dist[ 30 ]; // For unzipping
+
+         static const unsigned int  add_dist[ 30 ]; // For unzipping
+
+         /***  INPUT FILE  ***/
 
          std::ifstream infile;
 
          unsigned long size;       // Number of bytes in infile
+
+         unsigned long long lzss;  // Number of bits with pure LZSS, header excluded ( 1-bit diff + 8-bit lit OR 1-bit diff + 8-bit len + 15-bit dist )
 
          char * readframe;         // Length ZSEB_BUFFER; snippet from infile --> [ rd_shift : rd_shift + rd_end ]
 
@@ -74,6 +97,22 @@ namespace zseb{
          unsigned int  rd_end;     // Current validly filled length of readframe
 
          unsigned int  rd_current; // Current position within readframe
+
+         /***  OUTPUT FILE  ***/
+
+         std::ofstream outfile;
+
+         unsigned long long zlib;  // Number of bits with GZIP encoding, headed excluded
+
+         unsigned char * buffer;   // Length ZSEB_SHIFT; lit / ( len - 3 )
+
+         unsigned int * distance;  // Length ZSEB_SHIFT; dist where 0 means lit
+
+         unsigned int wr_current;  // Currently validly filled length of distance & buffer
+
+         unsigned int * stat_lit;  // Length ZSEB_HUF1 --> counts lit/len encounters
+
+         unsigned int * stat_dist; // Length ZSEB_HUF2 --> counts dist encounters
 
          /***  Hash table  ***/
 
@@ -87,11 +126,15 @@ namespace zseb{
 
          void __shift_left__();    // Shift readframe, hash_last and hash_ptrs
 
-         void __move_up__( unsigned int hash_entry ); // Add hash_entry & rd_current to hash; increment rd_current
+         inline void __move_up__( unsigned int hash_entry ); // Add hash_entry & rd_current to hash; increment rd_current
 
-         void __longest_match__( unsigned int * l_ptr, unsigned int * l_len, const unsigned int hash_entry, const unsigned int position ) const;
+         inline void __longest_match__( unsigned int * l_ptr, unsigned int * l_len, const unsigned int hash_entry, const unsigned int position ) const;
 
-         void __write_infile_test__();
+         inline void __append_lit_encode__();
+
+         inline void __append_len_encode__( const unsigned int dist_shift, const unsigned int length );
+
+         void __lzss_encode__();
 
    };
 
