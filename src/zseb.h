@@ -37,10 +37,10 @@
 #define ZSEB_LENGTH_SHIFT 3          // length = ZSEB_LENGTH_SHIFT + len_shift
 #define ZSEB_LENGTH_MAX   258U
 
-#define ZSEB_WR_FRAME     32776U     // 2^15 + 2^3:  important that 2^3  >= 4 and that ZSEB_WRFRAME < 2^16 !
-#define ZSEB_WR_TRIGGER   32768U     // 2^15
+#define ZSEB_WR_FRAME     16392U     // 2^15 + 2^3:  important that 2^3  >= 4 and that ZSEB_WRFRAME < 2^16 !
+#define ZSEB_WR_TRIGGER   16384U     // 2^14
 
-#define ZSEB_FLUSH_FRAME  49152U     // 2^15 + 2^14
+#define ZSEB_FLUSH_FRAME  65536U     // 2^16
 
 #define ZSEB_HASH_SIZE    16777216U  // ZSEB_LITLEN^3 = 2^24
 #define ZSEB_HASH_MASK    16777215U  // ZSEB_LITLEN^3 - 1 = 2^24 - 1

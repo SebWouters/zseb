@@ -89,7 +89,7 @@ void zseb::zseb::__zip__(){
    __lzss_encode__();
 
    std::cout << "zseb: reduction: LZSS    = " << 100.0 * ( 1.0 * size - 0.125 * lzss ) / size << "%." << std::endl;
-   std::cout << "                 Huffman = " <<         ( 1.0 * lzss -   1.0 * zlib ) / lzss << "%." << std::endl;
+   std::cout << "                 Huffman = " <<  12.5 * ( 1.0 * lzss -   1.0 * zlib ) / size << "%." << std::endl;
    std::cout << "                 Total   = " << 100.0 * ( 1.0 * size - 0.125 * zlib ) / size << "%." << std::endl;
 
 }
@@ -143,6 +143,7 @@ void zseb::zseb::__readin__(){
 void zseb::zseb::__writeout__( const bool last ){
 
    const zseb_32_t nchar = ( flsh_ptr >> 3 );
+   //std::cout << "zseb:nchar = " << nchar << std::endl;
    outfile.write( flushframe, nchar );
    flsh_ptr = ( flsh_ptr & 7U );
    flushframe[ 0 ] = flushframe[ nchar ];
@@ -257,6 +258,7 @@ void zseb::zseb::__lzss_encode__(){ // TODO: Move to LZSS class
          __shift_left__();
          if ( longest_ptr1 != ZSEB_HASH_STOP ){ longest_ptr1 = longest_ptr1 ^ ZSEB_SHIFT; } // longest_ptr1 >= rd_current + 1 - ZSEB_HISTORY >= ZSEB_SHIFT
          __readin__();
+         //std::cout << "zseb:trigger read" << std::endl;
       }
 
       if ( wr_current >= ZSEB_WR_TRIGGER ){
@@ -265,6 +267,7 @@ void zseb::zseb::__lzss_encode__(){ // TODO: Move to LZSS class
          zlib += ( flsh_ptr - flsh_begin );
          __writeout__( false );
          wr_current = 0;
+         //std::cout << "zseb:trigger write" << std::endl;
       }
 
    }

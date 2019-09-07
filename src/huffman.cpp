@@ -112,6 +112,7 @@ void zseb::huffman::__write__( char * flushframe, zseb_64_t &begin, const zseb_1
 
    const zseb_64_t ichar = ( begin >> 3 );
    const zseb_16_t ibit  = ( begin & 7U );
+   //std::cout << "ichar = " << ichar << std::endl;
 
    zseb_32_t present = flushframe[ ichar ];
    present = present & ( ( 1U << ibit ) - 1 ); // Keep only ibit bits
