@@ -28,30 +28,41 @@
 
 #define ZSEB_HUF_LLEN       288      // 0-255 lit; 256 stop; 257-285 len; 286 and 287 unused
 #define ZSEB_HUF_DIST       30       // 0-29 dist
+#define ZSEB_HUF_SSQ        19       // 0-15 prefix length; 16 prev rep; 17 small zero seq; 18 large zero seq
 #define ZSEB_HUF_TREE_LLEN  575      // 2 * ZSEB_HUF_LLEN - 1: WCS each llen_code encountered at least once
 #define ZSEB_HUF_TREE_DIST  59       // 2 * ZSEB_HUF_DIST - 1: WCS each dist_code encountered at least once
-#define ZSEB_HUF_STOP_CODE  256      // stop code
-#define ZSEB_HUF_PREF_MAX   15
+#define ZSEB_HUF_TREE_SSQ   37       // 2 * ZSEB_HUF_SSQ  - 1: WCS each  ssq_code encountered at least once
+
+#define ZSEB_MAX_BITS_LLD   15
+#define ZSEB_MAX_BITS_SSQ   7
 
 namespace zseb{
 
    typedef struct zseb_node {
+
       zseb_16_t child[ 2 ];
-      zseb_16_t data; // frequency OR bit representation
-      zseb_16_t info; // parent pointer OR number of bits in code
+      zseb_16_t data;       // freq   OR bit sequence
+      zseb_16_t info;       // parent OR bit length
+
    } zseb_node;
 
    class huffman{
 
       public:
 
-         static zseb_64_t flush( std::ofstream &outfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_16_t size, const bool last_blk );
+         static void pack( char * flushframe, zseb_64_t &flsh_ptr, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_16_t size, const bool last_blk );
 
       private:
 
          /***  HELPER FUNCTIONS  ***/
 
-         static zseb_64_t __prefix_lengths__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree );
+         static inline void __write__( char * flushframe, zseb_64_t &begin, const zseb_16_t data, const zseb_16_t nbits );
+
+         static void __prefix_lengths__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, const zseb_16_t ZSEB_MAX_BITS );
+
+         static void __build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, bool * work, const char option, const zseb_16_t ZSEB_MAX_BITS );
+
+         static zseb_16_t __ssq_creation__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree );
 
          /***  HUFFMAN TREE STATIC CONSTANTS  ***/
 
@@ -67,15 +78,13 @@ namespace zseb{
 
          static const zseb_16_t add_dist[ 30 ];  // base_distance = 1 + add_dist[ code_distance ];
 
-         static const zseb_08_t rle_order[ 19 ];
+         static const zseb_08_t bit_ssq[ 19 ];
+
+         static const zseb_08_t ssq_sym2pos[ 19 ];
+
+         static const zseb_08_t ssq_pos2sym[ 19 ];
 
          /***  CONVERSIONS  ***/
-         /*
-                 -->  len_shft =  length   - 3;                 [ 0 : 255 ]
-                 --> dist_shft =  distance - 1;                 [ 0 : 32767 ]
-                 -->  len_shft =  len_base + readin(  len_bits )
-                 --> dist_shft = dist_base + readin( dist_bits )             
-         */
 
          static inline zseb_16_t  __len_code__( const zseb_08_t  len_shft ); // [ 257 : 285 ]
 
@@ -84,10 +93,6 @@ namespace zseb{
          static inline zseb_08_t  __len_base__( const zseb_16_t  len_code ); // [ 0 : 255 ]
 
          static inline zseb_08_t __dist_code__( const zseb_16_t dist_shft ); // [ 0 :  29 ]
-
-         static inline zseb_08_t __dist_bits__( const zseb_08_t dist_code ); // [ 0 : 13 ]
-
-         static inline zseb_16_t __dist_base__( const zseb_08_t dist_code ); // [ 0 : 24576 ]
 
    };
 

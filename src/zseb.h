@@ -26,7 +26,9 @@
 
 #include "dtypes.h"
 
-#define ZSEB_READFRAME    131072U    // 2^17
+#define ZSEB_READ_FRAME   99328U     // 2^16 + 2^15 + 2^10: important that 2^10 > max( length ) = 258 !!!
+#define ZSEB_READ_TRIGGER 98304U     // 2^16 + 2^15: if ( rd_current > 2^16 + 2^15 ) --> SHIFT --> rd_current >= 2^15 + 1
+
 #define ZSEB_SHIFT        65536U     // 2^16
 #define ZSEB_HISTORY      32768U     // 2^15
 #define ZSEB_HISTORY_BIT  15
@@ -35,9 +37,10 @@
 #define ZSEB_LENGTH_SHIFT 3          // length = ZSEB_LENGTH_SHIFT + len_shift
 #define ZSEB_LENGTH_MAX   258U
 
-#define ZSEB_READ_TRIGGER 130048U    // 2^17 - 2^10: important that 2^10 > max( length ) = 258 !!!
 #define ZSEB_WR_FRAME     32776U     // 2^15 + 2^3:  important that 2^3  >= 4 and that ZSEB_WRFRAME < 2^16 !
 #define ZSEB_WR_TRIGGER   32768U     // 2^15
+
+#define ZSEB_FLUSH_FRAME  49152U     // 2^15 + 2^14
 
 #define ZSEB_HASH_SIZE    16777216U  // ZSEB_LITLEN^3 = 2^24
 #define ZSEB_HASH_MASK    16777215U  // ZSEB_LITLEN^3 - 1 = 2^24 - 1
@@ -71,11 +74,15 @@ namespace zseb{
 
          /***  OUTPUT FILE  ***/
 
+         char * flushframe; // Length ZSEB_FLUSH_FRAME: where huffman dumps data
+
+         zseb_64_t flsh_ptr; // Current bit position in flushframe
+
          std::ofstream outfile;
 
          zseb_64_t lzss; // Number of bits with pure LZSS, header excluded ( 1-bit diff + 8-bit lit OR 1-bit diff + 8-bit len_shift + 15-bit dist_shift )
 
-         zseb_64_t zlib; // Number of bits with GZIP, headed excluded: ( lzss - zlib ) is extra compression via huffman
+         zseb_64_t zlib; // Number of bits with GZIP, everything: ( lzss - zlib ) is extra compression via huffman
 
          zseb_08_t * llen_pack; // Length ZSEB_WR_FRAME; contains lit_code OR len_shift ( packing happens later )
 
@@ -94,6 +101,8 @@ namespace zseb{
          void __zip__();
 
          void __readin__();
+
+         void __writeout__( const bool last );
 
          void __shift_left__();    // Shift readframe, hash_last and hash_ptrs
 
