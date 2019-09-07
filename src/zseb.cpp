@@ -18,65 +18,8 @@
 */
 
 #include <assert.h>
+#include "huffman.h"
 #include "zseb.h"
-
-const zseb_08_t zseb::zseb::bit_len[ 29 ] = { 0, 0, 0, 0, 0, 0, 0, 0, 1,  1,  1,  1,  2,  2,  2,  2,  3,  3,  3,  3,  4,  4,  4,   4,   5,   5,   5,   5,   0 };
-
-const zseb_08_t zseb::zseb::add_len[ 29 ] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 255 };
-
-const zseb_08_t zseb::zseb::map_len[ 256 ] = {  0,  1,  2,  3,  4,  5,  6,  7,  8,  8,  9,  9, 10, 10, 11, 11,
-                                               12, 12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 14, 15, 15, 15, 15,
-                                               16, 16, 16, 16, 16, 16, 16, 16, 17, 17, 17, 17, 17, 17, 17, 17,
-                                               18, 18, 18, 18, 18, 18, 18, 18, 19, 19, 19, 19, 19, 19, 19, 19,
-                                               20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20,
-                                               21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
-                                               22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22,
-                                               23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
-                                               24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24,
-                                               24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24,
-                                               25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25,
-                                               25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25,
-                                               26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26,
-                                               26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26,
-                                               27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-                                               27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 28 };
-
-const zseb_08_t zseb::zseb::bit_dist[ 30 ] = { 0, 0, 0, 0, 1, 1, 2,  2,  3,  3,  4,  4,  5,  5,   6,   6,   7,   7,   8,   8,    9,   9,    10,   10,   11,   11,   12,    12,    13,    13 };
-
-const zseb_16_t zseb::zseb::add_dist[ 30 ] = { 0, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048, 3072, 4096, 6144, 8192, 12288, 16384, 24576 };
-
-const zseb_08_t zseb::zseb::map_dist[ 512 ] = {  0,   1,   2,   3,   4,   4,   5,   5,   6,   6,   6,   6,   7,   7,   7,   7,
-                                                 8,   8,   8,   8,   8,   8,   8,   8,   9,   9,   9,   9,   9,   9,   9,   9,
-                                                10,  10,  10,  10,  10,  10,  10,  10,  10,  10,  10,  10,  10,  10,  10,  10,
-                                                11,  11,  11,  11,  11,  11,  11,  11,  11,  11,  11,  11,  11,  11,  11,  11,
-                                                12,  12,  12,  12,  12,  12,  12,  12,  12,  12,  12,  12,  12,  12,  12,  12,
-                                                12,  12,  12,  12,  12,  12,  12,  12,  12,  12,  12,  12,  12,  12,  12,  12,
-                                                13,  13,  13,  13,  13,  13,  13,  13,  13,  13,  13,  13,  13,  13,  13,  13,
-                                                13,  13,  13,  13,  13,  13,  13,  13,  13,  13,  13,  13,  13,  13,  13,  13,
-                                                14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,
-                                                14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,
-                                                14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,
-                                                14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,  14,
-                                                15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,
-                                                15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,
-                                                15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,
-                                                15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,  15,
-                                               255, 255,  16,  17,  18,  18,  19,  19,  20,  20,  20,  20,  21,  21,  21,  21,
-                                                22,  22,  22,  22,  22,  22,  22,  22,  23,  23,  23,  23,  23,  23,  23,  23,
-                                                24,  24,  24,  24,  24,  24,  24,  24,  24,  24,  24,  24,  24,  24,  24,  24,
-                                                25,  25,  25,  25,  25,  25,  25,  25,  25,  25,  25,  25,  25,  25,  25,  25,
-                                                26,  26,  26,  26,  26,  26,  26,  26,  26,  26,  26,  26,  26,  26,  26,  26,
-                                                26,  26,  26,  26,  26,  26,  26,  26,  26,  26,  26,  26,  26,  26,  26,  26,
-                                                27,  27,  27,  27,  27,  27,  27,  27,  27,  27,  27,  27,  27,  27,  27,  27,
-                                                27,  27,  27,  27,  27,  27,  27,  27,  27,  27,  27,  27,  27,  27,  27,  27,
-                                                28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,
-                                                28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,
-                                                28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,
-                                                28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,  28,
-                                                29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,
-                                                29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,
-                                                29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,
-                                                29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29,  29 };
 
 zseb::zseb::zseb( std::string toread, std::string towrite, const char unzip ){
 
@@ -97,7 +40,7 @@ zseb::zseb::zseb( std::string toread, std::string towrite, const char unzip ){
       infile.seekg( 0, std::ios::beg );
       std::cout << "zseb: Opened " << toread << " with size " << size << "." << std::endl;
 
-    //outfile.open( towrite.c_str(), std::ios::out|std::ios::binary|std::ios::trunc );
+      outfile.open( towrite.c_str(), std::ios::out|std::ios::binary|std::ios::trunc );
 
       if ( unzip == 'Z' ){   __zip__(); }
     //if ( unzip == 'U' ){ __unzip__(); }
@@ -115,8 +58,6 @@ zseb::zseb::zseb( std::string toread, std::string towrite, const char unzip ){
 
       llen_pack = NULL;
       dist_pack = NULL;
-      stat_lit  = NULL;
-      stat_dist = NULL;
       wr_current = 0;
 
       hash_last = NULL;
@@ -133,12 +74,8 @@ void zseb::zseb::__zip__(){
    rd_end = 0;
    rd_current = 0;
 
-   llen_pack = new zseb_08_t[ ZSEB_SHIFT ];
-   dist_pack = new zseb_16_t[ ZSEB_SHIFT ];
-   stat_lit  = new zseb_32_t[ ZSEB_HUF1 ];
-   stat_dist = new zseb_32_t[ ZSEB_HUF2 ];
-   for ( zseb_16_t cnt = 0; cnt < ZSEB_HUF1; cnt++ ){ stat_lit [ cnt ] = 0; }
-   for ( zseb_16_t cnt = 0; cnt < ZSEB_HUF2; cnt++ ){ stat_dist[ cnt ] = 0; }
+   llen_pack = new zseb_08_t[ ZSEB_WR_FRAME ];
+   dist_pack = new zseb_16_t[ ZSEB_WR_FRAME ];
    wr_current = 0;
 
    hash_last = new zseb_32_t[ ZSEB_HASH_SIZE ];
@@ -154,12 +91,10 @@ void zseb::zseb::__zip__(){
 zseb::zseb::~zseb(){
 
    if (  infile.is_open() ){  infile.close(); }
- //if ( outfile.is_open() ){ outfile.close(); }
+   if ( outfile.is_open() ){ outfile.close(); }
    if ( readframe != NULL ){ delete [] readframe; }
    if ( llen_pack != NULL ){ delete [] llen_pack; }
    if ( dist_pack != NULL ){ delete [] dist_pack; }
-   if ( stat_lit  != NULL ){ delete [] stat_lit;  }
-   if ( stat_dist != NULL ){ delete [] stat_dist; }
    if ( hash_ptrs != NULL ){ delete [] hash_ptrs; }
    if ( hash_last != NULL ){ delete [] hash_last; }
 
@@ -237,12 +172,13 @@ void zseb::zseb::__append_lit_encode__(){
 
    lzss += ( ZSEB_LITLEN_BIT + 1 ); // 8-bit literal [ 0 : 255 ] + 1-bit differentiator
 
-   std::cout << readframe[ rd_current ];
+//   std::cout << readframe[ rd_current ];
 
-   const zseb_08_t lit_code = ( zseb_08_t )( readframe[ rd_current ] );
-   llen_pack[ wr_current ] = lit_code;       // [ 0 : 255 ]
-   dist_pack[ wr_current ] = ZSEB_LTRL_READ; // 65535
-   stat_lit[ lit_code ] += 1;                // [ 0 : 255 ]
+   llen_pack[ wr_current ] = ( zseb_08_t )( readframe[ rd_current ] ); // [ 0 : 255 ]
+   dist_pack[ wr_current ] = ZSEB_MAX_16T; // 65535
+
+   std::cout << llen_pack[ wr_current ];
+
    wr_current += 1;
 
 }
@@ -253,17 +189,13 @@ void zseb::zseb::__append_len_encode__( const zseb_16_t dist_shift, const zseb_0
 
    for ( zseb_16_t cnt = 0; cnt < ( ZSEB_LENGTH_SHIFT + len_shift ); cnt++ ){ std::cout << readframe[ rd_current - ( dist_shift + 1 ) + cnt ]; }
 
-   const zseb_16_t len_code  = ZSEB_LITLEN ^ ( 1 + map_len[ len_shift ] ); // len_code = 257 + map_len[ length - 3 ];
-   const zseb_16_t dist_code = ( ( dist_shift < 256 ) ? map_dist[ dist_shift ] : map_dist[ 256 ^ ( dist_shift >> 7 ) ] );
    llen_pack[ wr_current ] = len_shift;  // [ 0 : 255 ]
    dist_pack[ wr_current ] = dist_shift; // [ 0 : 32767 ]
-   stat_lit [ len_code  ] += 1;          // [ 257 : 285 ]
-   stat_dist[ dist_code ] += 1;          // [ 0 : 30 ]
    wr_current += 1;
 
 }
 
-void zseb::zseb::__lzss_encode__(){
+void zseb::zseb::__lzss_encode__(){ // TODO: Move to LZSS class
 
    zseb_32_t longest_ptr0;
    zseb_16_t longest_len0 = 3; // No reuse of ( ptr1, len1 ) data initially
@@ -306,9 +238,10 @@ void zseb::zseb::__lzss_encode__(){
          __shift_left__();
          if ( longest_ptr1 != ZSEB_HASH_STOP ){ longest_ptr1 = longest_ptr1 ^ ZSEB_SHIFT; } // longest_ptr1 >= rd_current + 1 - ZSEB_HISTORY >= ZSEB_SHIFT
          __readin__();
-         // __flush__( false ); Issue: not regular frameshifts: e.g. initial frameshift when rd_current > 2^17 - 2^10, second one after about 2^16 literals are processed...
-         for ( zseb_16_t cnt = 0; cnt < ZSEB_HUF1; cnt++ ){ stat_lit [ cnt ] = 0; }
-         for ( zseb_16_t cnt = 0; cnt < ZSEB_HUF2; cnt++ ){ stat_dist[ cnt ] = 0; }
+      }
+
+      if ( wr_current >= ZSEB_WR_TRIGGER ){
+         huffman::flush( outfile, llen_pack, dist_pack, wr_current, false );
          wr_current = 0;
       }
 
@@ -330,27 +263,9 @@ void zseb::zseb::__lzss_encode__(){
       rd_current += 1;
    }
 
-   // __flush__( true ); // See issue flush above
-
-}
-
-void zseb::zseb::__flush_encode__( const bool lastblock ){
-
-   // Stop codon 256 will also be used once :-)
-   stat_lit[ ZSEB_LITLEN ] += 1;
-
-   // Use stat_lit and state_dist to assign Huffman prefix lengths (HPL)
-
-   // Create block header based on HPL and stream to outfile in DEFLATE format
-
-   // Build standard Huffman code table (HCT) based on code lengths
-
-   // Stream everything to outfile in DEFLATE format
-
-   // Get ready for new block
-   for ( zseb_16_t cnt = 0; cnt < ZSEB_HUF1; cnt++ ){ stat_lit [ cnt ] = 0; }
-   for ( zseb_16_t cnt = 0; cnt < ZSEB_HUF2; cnt++ ){ stat_dist[ cnt ] = 0; }
+   huffman::flush( outfile, llen_pack, dist_pack, wr_current, true );
    wr_current = 0;
 
 }
+
 

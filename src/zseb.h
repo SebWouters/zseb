@@ -24,10 +24,7 @@
 #include <fstream>
 #include <string>
 
-#define zseb_08_t unsigned char      // c++ guarantees  8-bit
-#define zseb_16_t unsigned short     // c++ guarantees 16-bit
-#define zseb_32_t unsigned int       // c++ guarantees 16-bit, although 32_bit in practice
-#define zseb_64_t unsigned long long // c++ guarantees 64-bit
+#include "dtypes.h"
 
 #define ZSEB_READFRAME    131072U    // 2^17
 #define ZSEB_SHIFT        65536U     // 2^16
@@ -39,14 +36,12 @@
 #define ZSEB_LENGTH_MAX   258U
 
 #define ZSEB_READ_TRIGGER 130048U    // 2^17 - 2^10: important that 2^10 > max( length ) = 258 !!!
+#define ZSEB_WR_FRAME     32776U     // 2^15 + 2^3:  important that 2^3  >= 4 and that ZSEB_WRFRAME < 2^16 !
+#define ZSEB_WR_TRIGGER   32768U     // 2^15
 
 #define ZSEB_HASH_SIZE    16777216U  // ZSEB_LITLEN^3 = 2^24
 #define ZSEB_HASH_MASK    16777215U  // ZSEB_LITLEN^3 - 1 = 2^24 - 1
-#define ZSEB_HASH_STOP    ( ~( ( zseb_32_t )( 0 ) ) ) // pointers can be larger than 2^16
-#define ZSEB_LTRL_READ    ( ~( ( zseb_16_t )( 0 ) ) ) // if ( dist_pack[ x ] == ZSEB_LTRL_READ ) then llen_pack[ x ] is a lit_code, else llen_pack[ x ] is a len_shift
-
-#define ZSEB_HUF1         286U      // 0-255 lit; 256 stop; 257-285 len; 286 and 287 unused
-#define ZSEB_HUF2         30U       // 0-29 dist
+#define ZSEB_HASH_STOP    ( ~( ( zseb_32_t )( 0U ) ) ) // pointers can be larger than 2^16
 
 namespace zseb{
 
@@ -59,20 +54,6 @@ namespace zseb{
          virtual ~zseb();
 
       private:
-
-         /***  HUFFMAN TREE STATIC CONSTANTS  ***/
-
-         static const zseb_08_t map_len[ 256 ];  // code_length = 257 + map_len[ len_shift ]; ( len_shift = length - 3 )
-
-         static const zseb_08_t bit_len[ 29 ];   // bits_length =       bit_len[ code_length - 257 ];
-
-         static const zseb_08_t add_len[ 29 ];   // base_length =   3 + add_len[ code_length - 257 ];
-
-         static const zseb_08_t map_dist[ 512 ]; // code_distance = ( shift < 256 ) ? map_dist[ shift ] : map_dist[ 256 ^ ( shift >> 7 ) ]; ( shift = dist - 1 )
-
-         static const zseb_08_t bit_dist[ 30 ];  // bits_distance =     bit_dist[ code_distance ];
-
-         static const zseb_16_t add_dist[ 30 ];  // base_distance = 1 + add_dist[ code_distance ];
 
          /***  INPUT FILE  ***/
 
@@ -96,15 +77,11 @@ namespace zseb{
 
          zseb_64_t zlib; // Number of bits with GZIP, headed excluded: ( lzss - zlib ) is extra compression via huffman
 
-         zseb_08_t * llen_pack; // Length ZSEB_SHIFT; contains lit_code OR len_shift ( packing happend later )
+         zseb_08_t * llen_pack; // Length ZSEB_WR_FRAME; contains lit_code OR len_shift ( packing happens later )
 
-         zseb_16_t * dist_pack; // Length ZSEB_SHIFT; contains dist_shift [ 0 : 32767 ] with ZSEB_LTRL_READ means literal
+         zseb_16_t * dist_pack; // Length ZSEB_WR_FRAME; contains dist_shift [ 0 : 32767 ] with 65535 means literal
 
-         zseb_32_t wr_current;  // Currently validly filled length of distance & buffer
-
-         zseb_32_t * stat_lit;  // Length ZSEB_HUF1 --> counts lit/len code encounters: TODO: if shift every ZSEB_SHIFT char: counts cannot exceed 2^16
-
-         zseb_32_t * stat_dist; // Length ZSEB_HUF2 --> counts dist code encounters: TODO: if shift every ZSEB_SHIFT char: counts cannot exceed 2^16
+         zseb_16_t wr_current;  // Currently validly filled length of distance & buffer
 
          /***  Hash table  ***/
 
@@ -129,8 +106,6 @@ namespace zseb{
          inline void __append_len_encode__( const zseb_16_t dist_shift, const zseb_08_t len_shift );
 
          void __lzss_encode__();
-
-         void __flush_encode__( const bool lastblock );
 
    };
 
