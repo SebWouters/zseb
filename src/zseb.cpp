@@ -31,7 +31,6 @@ zseb::zseb::zseb( std::string toread, std::string towrite, const char unzip ){
    assert( ( unzip == 'Z' ) || ( unzip == 'U' ) );
 
    lzss = 0;
-   zlib = 0;
 
    infile.open( toread.c_str(), std::ios::in|std::ios::binary|std::ios::ate );
    if ( infile.is_open() ){
@@ -39,7 +38,9 @@ zseb::zseb::zseb( std::string toread, std::string towrite, const char unzip ){
       size = ( zseb_64_t )( infile.tellg() );
       infile.seekg( 0, std::ios::beg );
 
-      outfile.open( towrite.c_str(), std::ios::out|std::ios::binary|std::ios::trunc );
+      zipfile.file.open( towrite.c_str(), std::ios::out|std::ios::binary|std::ios::trunc );
+      zipfile.data = 0;
+      zipfile.ibit = 0;
 
       if ( unzip == 'Z' ){   __zip__(); }
     //if ( unzip == 'U' ){ __unzip__(); }
@@ -53,8 +54,6 @@ zseb::zseb::zseb( std::string toread, std::string towrite, const char unzip ){
       rd_end = 0;
       rd_current = 0;
 
-      flushframe = NULL;
-      flsh_ptr   = 0;
       llen_pack  = NULL;
       dist_pack  = NULL;
       wr_current = 0;
@@ -73,33 +72,36 @@ void zseb::zseb::__zip__(){
    rd_end = 0;
    rd_current = 0;
 
-   flushframe = new char[ ZSEB_FLUSH_FRAME ];
-   flsh_ptr   = 0;
    llen_pack  = new zseb_08_t[ ZSEB_WR_FRAME ];
    dist_pack  = new zseb_16_t[ ZSEB_WR_FRAME ];
    wr_current = 0;
-   for ( zseb_32_t cnt = 0; cnt < ZSEB_FLUSH_FRAME; cnt++ ){ flushframe[ cnt ] = 0; }
 
    hash_last = new zseb_32_t[ ZSEB_HASH_SIZE ];
    hash_ptrs = new zseb_32_t[ ZSEB_READ_FRAME ];
    for ( zseb_32_t cnt = 0; cnt < ZSEB_HASH_SIZE;  cnt++ ){ hash_last[ cnt ] = ZSEB_HASH_STOP; }
    for ( zseb_32_t cnt = 0; cnt < ZSEB_READ_FRAME; cnt++ ){ hash_ptrs[ cnt ] = ZSEB_HASH_STOP; }
 
+   //After write GZIP file preamble, get current position
+   zseb_64_t zlib = ( zseb_64_t )( zipfile.file.tellg() );
+
    __readin__();
    __lzss_encode__();
 
-   std::cout << "zseb: reduction: LZSS    = " << 100.0 * ( 1.0 * size - 0.125 * lzss ) / size << "%." << std::endl;
-   std::cout << "                 Huffman = " <<  12.5 * ( 1.0 * lzss -   1.0 * zlib ) / size << "%." << std::endl;
-   std::cout << "                 Total   = " << 100.0 * ( 1.0 * size - 0.125 * zlib ) / size << "%." << std::endl;
+   //BEFORE write GZIP checksums, get current position
+   zlib = ( zseb_64_t )( zipfile.file.tellg() ) - zlib;
+
+   //LZSS: ( 1-bit diff + 8-bit lit ) OR ( 1-bit diff + 8-bit len_shift + 15-bit dist_shift )
+   std::cout << "zseb: reduction: LZSS    = " << 100.0 * ( 1.0   * size - 0.125 * lzss ) / size << "%." << std::endl; // No headers or checksums included
+   std::cout << "                 Huffman = " << 100.0 * ( 0.125 * lzss -   1.0 * zlib ) / size << "%." << std::endl;
+   std::cout << "                 Total   = " << 100.0 * ( 1.0   * size -   1.0 * zlib ) / size << "%." << std::endl; // No headers or checksums included
 
 }
 
 zseb::zseb::~zseb(){
 
-   if (  infile.is_open() ){  infile.close(); }
-   if ( outfile.is_open() ){ outfile.close(); }
+   if (       infile.is_open() ){       infile.close(); }
+   if ( zipfile.file.is_open() ){ zipfile.file.close(); }
    if ( readframe  != NULL ){ delete [] readframe;  }
-   if ( flushframe != NULL ){ delete [] flushframe; }
    if ( llen_pack  != NULL ){ delete [] llen_pack;  }
    if ( dist_pack  != NULL ){ delete [] dist_pack;  }
    if ( hash_ptrs  != NULL ){ delete [] hash_ptrs;  }
@@ -137,19 +139,6 @@ void zseb::zseb::__readin__(){
    const zseb_32_t current_read = ( ( rd_shift + ZSEB_READ_FRAME > size ) ? ( size - rd_shift - rd_end ) : ( ZSEB_READ_FRAME - rd_end ) );
    infile.read( readframe + rd_end, current_read );
    rd_end += current_read;
-
-}
-
-void zseb::zseb::__writeout__( const bool last ){
-
-   const zseb_32_t nchar = ( flsh_ptr >> 3 );
-   //std::cout << "zseb:nchar = " << nchar << std::endl;
-   outfile.write( flushframe, nchar );
-   flsh_ptr = ( flsh_ptr & 7U );
-   flushframe[ 0 ] = flushframe[ nchar ];
-   for ( zseb_32_t cnt = 1; cnt < ZSEB_FLUSH_FRAME; cnt++ ){ flushframe[ cnt ] = 0; }
-
-   if ( ( last ) && ( flsh_ptr > 0 ) ){ outfile.write( flushframe, 1 ); }
 
 }
 
@@ -191,8 +180,6 @@ void zseb::zseb::__longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len
 void zseb::zseb::__append_lit_encode__(){
 
    lzss += ( ZSEB_LITLEN_BIT + 1 ); // 8-bit literal [ 0 : 255 ] + 1-bit differentiator
-
-//   std::cout << readframe[ rd_current ];
 
    llen_pack[ wr_current ] = ( zseb_08_t )( readframe[ rd_current ] ); // [ 0 : 255 ]
    dist_pack[ wr_current ] = ZSEB_MAX_16T; // 65535
@@ -258,16 +245,11 @@ void zseb::zseb::__lzss_encode__(){ // TODO: Move to LZSS class
          __shift_left__();
          if ( longest_ptr1 != ZSEB_HASH_STOP ){ longest_ptr1 = longest_ptr1 ^ ZSEB_SHIFT; } // longest_ptr1 >= rd_current + 1 - ZSEB_HISTORY >= ZSEB_SHIFT
          __readin__();
-         //std::cout << "zseb:trigger read" << std::endl;
       }
 
       if ( wr_current >= ZSEB_WR_TRIGGER ){
-         zseb_64_t flsh_begin = flsh_ptr;
-         huffman::pack( flushframe, flsh_ptr, llen_pack, dist_pack, wr_current, false );
-         zlib += ( flsh_ptr - flsh_begin );
-         __writeout__( false );
+         huffman::pack( zipfile, llen_pack, dist_pack, wr_current, false );
          wr_current = 0;
-         //std::cout << "zseb:trigger write" << std::endl;
       }
 
    }
@@ -288,10 +270,7 @@ void zseb::zseb::__lzss_encode__(){ // TODO: Move to LZSS class
       rd_current += 1;
    }
 
-   zseb_64_t flsh_begin = flsh_ptr;
-   huffman::pack( flushframe, flsh_ptr, llen_pack, dist_pack, wr_current, true );
-   zlib += ( flsh_ptr - flsh_begin );
-   __writeout__( true );
+   huffman::pack( zipfile, llen_pack, dist_pack, wr_current, true );
    wr_current = 0;
 
 }

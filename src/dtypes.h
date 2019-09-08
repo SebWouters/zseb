@@ -20,6 +20,8 @@
 #ifndef __ZSEB_DTYPES__
 #define __ZSEB_DTYPES__
 
+#include <fstream>
+
 #define zseb_08_t unsigned char      // c++ guarantees  8-bit at least
 #define zseb_16_t unsigned short     // c++ guarantees 16-bit at least
 #define zseb_32_t unsigned int       // c++ guarantees 16-bit at least, but often 32-bit in practice (ILP32, LLP64, LP64)
@@ -27,6 +29,18 @@
 
 #define ZSEB_256_16T    ( ( zseb_16_t )( 256 ) )
 #define ZSEB_MAX_16T    65535
+
+namespace zseb{
+
+   typedef struct zseb_stream{
+
+      std::fstream file;
+      zseb_16_t    ibit;
+      zseb_32_t    data;
+
+   } zseb_stream;
+
+}
 
 #endif
 

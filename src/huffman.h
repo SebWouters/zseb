@@ -50,13 +50,13 @@ namespace zseb{
 
       public:
 
-         static void pack( char * flushframe, zseb_64_t &flsh_ptr, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_16_t size, const bool last_blk );
+         static void pack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_16_t size, const bool last_blk );
 
       private:
 
          /***  HELPER FUNCTIONS  ***/
 
-         static inline void __write__( char * flushframe, zseb_64_t &begin, const zseb_16_t data, const zseb_16_t nbits );
+         static inline void __write__( zseb_stream &zipfile, const zseb_16_t data, const zseb_16_t nbits );
 
          static void __prefix_lengths__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, const zseb_16_t ZSEB_MAX_BITS );
 

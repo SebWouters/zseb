@@ -108,29 +108,30 @@ zseb_08_t zseb::huffman::__dist_code__( const zseb_16_t dist_shft ){
 
 }
 
-void zseb::huffman::__write__( char * flushframe, zseb_64_t &begin, const zseb_16_t data, const zseb_16_t nbits ){
+void zseb::huffman::__write__( zseb_stream &zipfile, const zseb_16_t flush, const zseb_16_t nbits ){
 
-   const zseb_64_t ichar = ( begin >> 3 );
-   const zseb_16_t ibit  = ( begin & 7U );
-   //std::cout << "ichar = " << ichar << std::endl;
-
-   zseb_32_t present = flushframe[ ichar ];
-   present = present & ( ( 1U << ibit ) - 1 ); // Keep only ibit bits
+   zseb_16_t ibit = zipfile.ibit;
+   zseb_32_t data = zipfile.data;
+   //data = data & ( ( 1U << ibit ) - 1 ); // Mask last ibit bits
 
    for ( zseb_16_t bit = 0; bit < nbits; bit++ ){ // Append biggest first
-      present |= ( ( ( data >> ( nbits - 1 - bit ) ) & 1U ) << ( ibit + bit ) );
+      data |= ( ( ( flush >> ( nbits - 1 - bit ) ) & 1U ) << ( ibit + bit ) );
+   }
+   ibit = ibit + nbits;
+
+   while ( ibit >= 8 ){
+      zseb_08_t towrite = ( zseb_08_t )( data & 255U ); // Mask last 8 bits
+      zipfile.file << towrite;
+      data = ( data >> 8 );
+      ibit = ibit - 8;
    }
 
-   for ( zseb_16_t shft = 0; shft < 4; shft++ ){
-      flushframe[ ichar + shft ] = ( present & 255U );
-      present = ( present >> 8 );
-   }
-
-   begin += nbits;
+   zipfile.ibit = ( zseb_08_t )( ibit );
+   zipfile.data = ( zseb_08_t )( data );
 
 }
 
-void zseb::huffman::pack( char * flushframe, zseb_64_t &flsh_ptr, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_16_t size, const bool last_blk ){
+void zseb::huffman::pack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_16_t size, const bool last_blk ){
 
    zseb_16_t * stat_llen = new zseb_16_t[ ZSEB_HUF_LLEN ];
    zseb_16_t * stat_dist = new zseb_16_t[ ZSEB_HUF_DIST ];
@@ -186,51 +187,51 @@ void zseb::huffman::pack( char * flushframe, zseb_64_t &flsh_ptr, zseb_08_t * ll
    // Retrieve the length of the non-zero CCL
    zseb_16_t HCLEN = ZSEB_HUF_SSQ; while ( stat_ssq[ HCLEN - 1 ] == 0 ){ HCLEN -= 1; } assert( HCLEN >= 4 );
 
-   __write__( flushframe, flsh_ptr, ( ( last_blk ) ? 6 : 2 ), 3 ); // Dynamic header: 110 for last_blk; 010 for non-last_block
-   __write__( flushframe, flsh_ptr, HLIT  - 257, 5 ); // HLIT
-   __write__( flushframe, flsh_ptr, HDIST - 1,   5 ); // HDIST
-   __write__( flushframe, flsh_ptr, HCLEN - 4,   4 ); // HCLEN
+   __write__( zipfile, ( ( last_blk ) ? 6 : 2 ), 3 ); // Dynamic header: 110 for last_blk; 010 for non-last_block
+   __write__( zipfile, HLIT  - 257, 5 ); // HLIT
+   __write__( zipfile, HDIST - 1,   5 ); // HDIST
+   __write__( zipfile, HCLEN - 4,   4 ); // HCLEN
    for ( zseb_16_t idx = 0; idx < HCLEN; idx++ ){
-      __write__( flushframe, flsh_ptr, tree_ssq[ idx ].info, 3 ); // CCL of reshuffled RLE symbols
+      __write__( zipfile, tree_ssq[ idx ].info, 3 ); // CCL of reshuffled RLE symbols
    }
    for ( zseb_16_t idx = 0; idx < size_ssq_llen; idx++ ){
       zseb_16_t idx_map = ssq_sym2pos[ stat_llen[ idx ] ];
-      __write__( flushframe, flsh_ptr, tree_ssq[ idx_map ].data, tree_ssq[ idx_map ].info ); // RLE symbols in CCL codons
+      __write__( zipfile, tree_ssq[ idx_map ].data, tree_ssq[ idx_map ].info ); // RLE symbols in CCL codons
       if ( stat_llen[ idx ] >= 16 ){
-         __write__( flushframe, flsh_ptr, stat_llen[ idx + 1 ], bit_ssq[ stat_llen[ idx ] ] ); // Shifts
+         __write__( zipfile, stat_llen[ idx + 1 ], bit_ssq[ stat_llen[ idx ] ] ); // Shifts
          idx++;
       }
    }
    for ( zseb_16_t idx = 0; idx < size_ssq_dist; idx++ ){
       zseb_16_t idx_map = ssq_sym2pos[ stat_dist[ idx ] ];
-      __write__( flushframe, flsh_ptr, tree_ssq[ idx_map ].data, tree_ssq[ idx_map ].info ); // RLE symbols in CCL codons
+      __write__( zipfile, tree_ssq[ idx_map ].data, tree_ssq[ idx_map ].info ); // RLE symbols in CCL codons
       if ( stat_dist[ idx ] >= 16 ){
-         __write__( flushframe, flsh_ptr, stat_dist[ idx + 1 ], bit_ssq[ stat_dist[ idx ] ] ); // Shifts
+         __write__( zipfile, stat_dist[ idx + 1 ], bit_ssq[ stat_dist[ idx ] ] ); // Shifts
          idx++;
       }
    }
    for ( zseb_16_t idx = 0; idx < size; idx++ ){
       if ( dist_pack[ idx ] == ZSEB_MAX_16T ){
          const zseb_16_t lit_code = llen_pack[ idx ];
-         __write__( flushframe, flsh_ptr, tree_llen[ lit_code ].data, tree_llen[ lit_code ].info ); // Literal
+         __write__( zipfile, tree_llen[ lit_code ].data, tree_llen[ lit_code ].info ); // Literal
       } else {
          const zseb_16_t len_code = __len_code__( llen_pack[ idx ] );
          const zseb_16_t len_nbit = __len_bits__( len_code );
-         __write__( flushframe, flsh_ptr, tree_llen[ len_code ].data, tree_llen[ len_code ].info ); // Length codon
+         __write__( zipfile, tree_llen[ len_code ].data, tree_llen[ len_code ].info ); // Length codon
          if ( len_nbit > 0 ){
             const zseb_16_t len_plus = llen_pack[ idx ] - __len_base__( len_code );
-            __write__( flushframe, flsh_ptr, len_plus, len_nbit ); // Shifts
+            __write__( zipfile, len_plus, len_nbit ); // Shifts
          }
          const zseb_16_t dist_code = __dist_code__( dist_pack[ idx ] );
          const zseb_16_t dist_nbit = bit_dist[ dist_code ];
-         __write__( flushframe, flsh_ptr, tree_dist[ dist_code ].data, tree_dist[ dist_code ].info ); // Dist codon
+         __write__( zipfile, tree_dist[ dist_code ].data, tree_dist[ dist_code ].info ); // Dist codon
          if ( dist_nbit > 0 ){
             const zseb_16_t dist_plus = dist_pack[ idx ] - add_dist[ dist_code ];
-            __write__( flushframe, flsh_ptr, dist_plus, dist_nbit ); // Shifts
+            __write__( zipfile, dist_plus, dist_nbit ); // Shifts
          }
       }
    }
-   __write__( flushframe, flsh_ptr, tree_llen[ 256 ].data, tree_llen[ 256 ].info ); // Stop codon
+   __write__( zipfile, tree_llen[ 256 ].data, tree_llen[ 256 ].info ); // Stop codon
 
    delete [] stat_llen;
    delete [] stat_dist;
