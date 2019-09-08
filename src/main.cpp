@@ -21,7 +21,8 @@
 
 int main(){
 
-   zseb::zseb( "tests/bible.txt", "dump.zseb", 'Z' );
+   zseb::zseb runner( "tests/bible.txt", "dump.zseb", 'Z' );
+   runner.zip();
 
    return 0;
 
