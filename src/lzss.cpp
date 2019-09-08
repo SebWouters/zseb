@@ -54,9 +54,20 @@ zseb::lzss::lzss( std::string fullfile, const char modus ){
 
       } else {
 
-         std::cout << "zseb::lzss: Unable to open " << fullfile << "." << std::endl;
+         std::cerr << "zseb::lzss: Unable to open " << fullfile << "." << std::endl;
 
       }
+   }
+
+   if ( modus == 'U' ){
+
+      file.open( fullfile.c_str(), std::ios::out|std::ios::binary|std::ios::trunc );
+
+      frame = new char[ ZSEB_FRAME ];
+      rd_shift = 0;
+      rd_end = 0;
+      rd_current = 0;
+
    }
 
 }
@@ -70,7 +81,53 @@ zseb::lzss::~lzss(){
 
 }
 
-bool zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_16_t size_pack, zseb_16_t &wr_current ){
+void zseb::lzss::flush(){
+
+   file.write( frame, rd_current );
+   rd_current = 0;
+   size_file = ( zseb_64_t )( file.tellg() );
+
+}
+
+void zseb::lzss::inflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size_pack ){
+
+   for ( zseb_32_t idx = 0; idx < size_pack; idx++ ){
+
+      if ( dist_pack[ idx ] == ZSEB_MAX_16T ){ // write LIT
+
+         frame[ rd_current ] = llen_pack[ idx ];
+         rd_current += 1;
+
+      } else { // copy ( LEN, DIST )
+
+         zseb_32_t distance = dist_pack[ idx ] + 1;
+         zseb_32_t length   = llen_pack[ idx ];
+                   length   = length + 3;
+
+         for ( zseb_32_t cnt = 0; cnt < length; cnt++ ){
+            frame[ rd_current + cnt ] = frame[ rd_current - distance + cnt ];
+         }
+         rd_current += length;
+
+      }
+
+      if ( rd_current > ZSEB_TRIGGER ){
+
+         file.write( frame, ZSEB_SHIFT );
+         for ( zseb_32_t cnt = 0; cnt < ( rd_current - ZSEB_SHIFT ); cnt++ ){
+            frame[ cnt ] = frame[ ZSEB_SHIFT + cnt ];
+         }
+         rd_current -= ZSEB_SHIFT;
+
+      }
+
+   }
+
+   size_lzss += size_pack;
+
+}
+
+bool zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size_pack, zseb_32_t &wr_current ){
 
    zseb_32_t longest_ptr0;
    zseb_16_t longest_len0 = 3; // No reuse of ( ptr1, len1 ) data initially
@@ -162,11 +219,11 @@ void zseb::lzss::__shift_left__(){
    /* ZSEB_SHIFT = 2^16 <= temp < ZSEB_FRAME < 2^17: temp - ZSEB_SHIFT = temp ^ ZSEB_SHIFT ( XOR, bit toggle 2^16 )
                       0 <= cnt  < ZSEB_SHIFT = 2^16: cnt  + ZSEB_SHIFT = cnt  ^ ZSEB_SHIFT ( XOR, bit toggle 2^16 ) */
 
-   for ( zseb_32_t cnt = 0; cnt < ( rd_end - ZSEB_SHIFT ); cnt++ ){ // cnt < ZSEB_SHIFT
-      frame[ cnt ] = frame[ cnt ^ ZSEB_SHIFT ]; // cnt + ZSEB_SHIFT
+   for ( zseb_32_t cnt = 0; cnt < ( rd_end - ZSEB_SHIFT ); cnt++ ){
+      frame[ cnt ] = frame[ cnt + ZSEB_SHIFT ];
    }
    for ( zseb_32_t cnt = 0; cnt < ( rd_end - ZSEB_SHIFT ); cnt++ ){ // cnt < ZSEB_SHIFT
-      const zseb_32_t temp = hash_ptrs[ cnt ^ ZSEB_SHIFT ]; // cnt + ZSEB_SHIFT
+      const zseb_32_t temp = hash_ptrs[ cnt + ZSEB_SHIFT ];
       hash_ptrs[ cnt ] = ( ( ( temp == ZSEB_HASH_STOP ) || ( temp < ZSEB_SHIFT ) ) ? ( ZSEB_HASH_STOP ) : ( temp ^ ZSEB_SHIFT ) ); // temp - ZSEB_SHIFT
    }
    for ( zseb_32_t abc = 0; abc < ZSEB_HASH_SIZE; abc++ ){
@@ -221,24 +278,20 @@ void zseb::lzss::__longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len
 
 }
 
-void zseb::lzss::__append_lit_encode__( zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_16_t &wr_current ){
+void zseb::lzss::__append_lit_encode__( zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current ){
 
    size_lzss += ( ZSEB_LITLEN_BIT + 1 ); // 8-bit literal [ 0 : 255 ] + 1-bit differentiator
 
    llen_pack[ wr_current ] = ( zseb_08_t )( frame[ rd_current ] ); // [ 0 : 255 ]
    dist_pack[ wr_current ] = ZSEB_MAX_16T; // 65535
 
-   std::cout << llen_pack[ wr_current ];
-
    wr_current += 1;
 
 }
 
-void zseb::lzss::__append_len_encode__( zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_16_t &wr_current, const zseb_16_t dist_shift, const zseb_08_t len_shift ){
+void zseb::lzss::__append_len_encode__( zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_16_t dist_shift, const zseb_08_t len_shift ){
 
    size_lzss += ( ZSEB_HISTORY_BIT + ZSEB_LITLEN_BIT + 1 ); // 15-bit dist_shift [ 0 : 32767 ] + 8-bit len_shift [ 0 : 255 ] + 1-bit differentiator
-
-   for ( zseb_16_t cnt = 0; cnt < ( ZSEB_LENGTH_SHIFT + len_shift ); cnt++ ){ std::cout << frame[ rd_current - ( dist_shift + 1 ) + cnt ]; }
 
    llen_pack[ wr_current ] = len_shift;  // [ 0 : 255 ]
    dist_pack[ wr_current ] = dist_shift; // [ 0 : 32767 ]

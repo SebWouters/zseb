@@ -50,7 +50,9 @@ namespace zseb{
 
       public:
 
-         static void pack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_16_t size, const bool last_blk );
+         static void  pack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size, const bool last_blk );
+
+         static int unpack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack );
 
       private:
 
@@ -58,11 +60,17 @@ namespace zseb{
 
          static inline void __write__( zseb_stream &zipfile, const zseb_16_t data, const zseb_16_t nbits );
 
+         static inline zseb_16_t __read__( zseb_stream &zipfile, const zseb_16_t nbits );
+
          static void __prefix_lengths__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, const zseb_16_t ZSEB_MAX_BITS );
 
          static void __build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, bool * work, const char option, const zseb_16_t ZSEB_MAX_BITS );
 
          static zseb_16_t __ssq_creation__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree );
+
+         static void __CL_unpack__( zseb_stream &zipfile, zseb_node * tree_ssq, const zseb_16_t size, zseb_16_t * stat );
+
+         static zseb_16_t __get_sym__( zseb_stream &zipfile, zseb_node * tree );
 
          /***  HUFFMAN TREE STATIC CONSTANTS  ***/
 

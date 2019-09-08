@@ -18,6 +18,9 @@
 */
 
 #include <assert.h>
+#include <sys/time.h>
+#include <unistd.h>
+
 #include "huffman.h"
 #include "zseb.h"
 
@@ -48,6 +51,22 @@ zseb::zseb::zseb( std::string toread, std::string towrite, const char modus ){
 
    }
 
+   if ( modus == 'U' ){
+
+      flate = new lzss( towrite, modus );
+
+      zipfile.file.open( toread.c_str(), std::ios::in|std::ios::binary ); // At begin
+      zipfile.data = 0;
+      zipfile.ibit = 0;
+
+      llen_pack  = new zseb_08_t[ ZSEB_UNPACK_SIZE ];
+      dist_pack  = new zseb_16_t[ ZSEB_UNPACK_SIZE ];
+      wr_current = 0;
+
+      if ( zipfile.file.is_open() == false ){ std::cerr << "zseb::zseb: Unable to open " << toread << "." << std::endl; }
+
+   }
+
 }
 
 zseb::zseb::~zseb(){
@@ -67,10 +86,22 @@ void zseb::zseb::zip(){
 
    bool last_block = false;
 
+   struct timeval start, end;
+   double time_lzss = 0;
+   double time_huff = 0;
+
    while ( last_block == false ){
 
+      gettimeofday( &start, NULL );
       last_block = flate->deflate( llen_pack, dist_pack, ZSEB_PACK_TRIGGER, wr_current );
+      gettimeofday( &end, NULL );
+      time_lzss += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
+
+      gettimeofday( &start, NULL );
       huffman::pack( zipfile, llen_pack, dist_pack, wr_current, last_block );
+      gettimeofday( &end, NULL );
+      time_huff += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
+
       wr_current = 0;
 
    }
@@ -85,10 +116,48 @@ void zseb::zseb::zip(){
    const double red_lzss = 100.0 * ( 1.0   * size_file - 0.125 * size_lzss ) / size_file;
    const double red_huff = 100.0 * ( 0.125 * size_lzss -   1.0 * size_zlib ) / size_file;
 
-   std::cout << "zseb: reduction: LZSS  = " << red_lzss << "%." << std::endl;
-   std::cout << "                 Huff  = " << red_huff << "%." << std::endl;
-   std::cout << "                 Sum   = " << red_lzss + red_huff << "%." << std::endl;
-   std::cout << "                 Ratio = " << size_file / ( 1.0 * size_zlib ) << std::endl;
+   std::cout << "zseb: zip: LZSS  = " << red_lzss << "%." << std::endl;
+   std::cout << "           Huff  = " << red_huff << "%." << std::endl;
+   std::cout << "           Sum   = " << red_lzss + red_huff << "%." << std::endl;
+   std::cout << "           Ratio = " << size_file / ( 1.0 * size_zlib ) << std::endl;
+   std::cout << "zseb: zip: LZSS  = " << time_lzss << "s." << std::endl;
+   std::cout << "           Huff  = " << time_huff << "s." << std::endl;
+
+}
+
+void zseb::zseb::unzip(){
+
+   // TODO: Read GZIP preamble
+
+   int last_block = 0;
+
+   struct timeval start, end;
+   double time_lzss = 0;
+   double time_huff = 0;
+
+   while ( last_block == 0 ){
+
+      gettimeofday( &start, NULL );
+      last_block = huffman::unpack( zipfile, llen_pack, dist_pack, wr_current, ZSEB_UNPACK_SIZE );
+      assert( last_block < 2 ); // TODO: If last_block 2, then create longer llen_pack and dist_pack and copy previous wr_current data
+      gettimeofday( &end, NULL );
+      time_huff += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
+
+      gettimeofday( &start, NULL );
+      flate->inflate( llen_pack, dist_pack, wr_current );
+      gettimeofday( &end, NULL );
+      time_lzss += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
+
+      wr_current = 0;
+
+   }
+
+   flate->flush();
+
+   // TODO: Verify GZIP checksums
+
+   std::cout << "zseb: unzip: LZSS  = " << time_lzss << "s." << std::endl;
+   std::cout << "             Huff  = " << time_huff << "s." << std::endl;
 
 }
 

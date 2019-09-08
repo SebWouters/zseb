@@ -21,9 +21,13 @@
 
 int main(){
 
-   zseb::zseb runner( "tests/bible.txt", "dump.zseb", 'Z' );
-   runner.zip();
+   zseb::zseb zipper( "tests/bible.txt", "dump.zseb", 'Z' );
+   zipper.zip();
+
+   zseb::zseb unzipper( "dump.zseb", "dump.unzip.txt", 'U' );
+   unzipper.unzip();
 
    return 0;
 
 }
+

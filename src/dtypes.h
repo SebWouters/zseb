@@ -34,8 +34,8 @@
 #define ZSEB_LENGTH_SHIFT 3          // length = ZSEB_LENGTH_SHIFT + len_shift
 #define ZSEB_LENGTH_MAX   258U
 
-#define ZSEB_256_16T    ( ( zseb_16_t )( 256 ) )
-#define ZSEB_MAX_16T    65535
+#define ZSEB_256_16T      ( ( zseb_16_t )( 256 ) )
+#define ZSEB_MAX_16T      65535
 
 namespace zseb{
 

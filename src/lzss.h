@@ -46,7 +46,11 @@ namespace zseb{
          virtual ~lzss();
 
          // Following returns "Last block?"; on input wr_current is reset to zero; on output wr_current is #elem in *_pack; max(wr_current) <= size_pack + 4
-         bool deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_16_t size_pack, zseb_16_t &wr_current );
+         bool deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size_pack, zseb_32_t &wr_current );
+
+         void inflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size_pack );
+
+         void flush();
 
          zseb_64_t get_lzss_bits() const;
 
@@ -88,9 +92,9 @@ namespace zseb{
 
          inline void __longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len, const zseb_32_t hash_entry, const zseb_32_t position ) const;
 
-         inline void __append_lit_encode__( zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_16_t &wr_current );
+         inline void __append_lit_encode__( zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current );
 
-         inline void __append_len_encode__( zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_16_t &wr_current, const zseb_16_t dist_shift, const zseb_08_t len_shift );
+         inline void __append_len_encode__( zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_16_t dist_shift, const zseb_08_t len_shift );
 
    };
 

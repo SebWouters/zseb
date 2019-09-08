@@ -30,6 +30,8 @@
 #define ZSEB_PACK_SIZE      16392U     // 2^15 + 2^3:  important that 2^3  >= 4 and that ZSEB_PACK_TRIGGER < 2^16 !
 #define ZSEB_PACK_TRIGGER   16384U     // 2^14
 
+#define ZSEB_UNPACK_SIZE    65536U     // 2^16: play it a little bit safer :-)
+
 namespace zseb{
 
    class zseb{
@@ -42,6 +44,8 @@ namespace zseb{
 
          void zip();
 
+         void unzip();
+
       private:
 
          lzss * flate;
@@ -52,7 +56,7 @@ namespace zseb{
 
          zseb_16_t * dist_pack; // Length ZSEB_WR_FRAME; contains dist_shift [ 0 : 32767 ] with 65535 means literal
 
-         zseb_16_t wr_current;  // Currently validly filled length of distance & buffer
+         zseb_32_t wr_current;  // Currently validly filled length of llen_pack and dist_pack
 
    };
 
