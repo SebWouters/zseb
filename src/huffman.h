@@ -26,8 +26,9 @@
 
 #include "dtypes.h"
 
-#define ZSEB_HUF_LLEN       288      // 0-255 lit; 256 stop; 257-285 len; 286 and 287 unused
+#define ZSEB_HUF_LLEN       286      // 0-255 lit; 256 stop; 257-285 len; 286 and 287 unused
 #define ZSEB_HUF_DIST       30       // 0-29 dist
+#define ZSEB_HUF_COMBI      316      // ZSEB_HUF_LLEN + ZSEB_HUF_DIST
 #define ZSEB_HUF_SSQ        19       // 0-15 prefix length; 16 prev rep; 17 small zero seq; 18 large zero seq
 #define ZSEB_HUF_TREE_LLEN  575      // 2 * ZSEB_HUF_LLEN - 1: WCS each llen_code encountered at least once
 #define ZSEB_HUF_TREE_DIST  59       // 2 * ZSEB_HUF_DIST - 1: WCS each dist_code encountered at least once
@@ -66,7 +67,7 @@ namespace zseb{
 
          static void __build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, bool * work, const char option, const zseb_16_t ZSEB_MAX_BITS );
 
-         static zseb_16_t __ssq_creation__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree );
+         static zseb_16_t __ssq_creation__( zseb_16_t * stat, const zseb_16_t size );
 
          static void __CL_unpack__( zseb_stream &zipfile, zseb_node * tree_ssq, const zseb_16_t size, zseb_16_t * stat );
 
