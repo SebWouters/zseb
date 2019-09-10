@@ -498,7 +498,7 @@ void zseb::huffman::__CL_unpack__( zseb_stream &zipfile, zseb_node * tree_ssq, c
       if ( idx_sym == 16 ){
          assert( size_part > 0 );
          bit = 3 + __read__( zipfile, 2 ); // num repeats
-         std::cout << bit << " ; ";
+         std::cout << 16 << " ; " << ( bit - 3 ) << " ; ";
          while ( bit > 0 ){
             stat[ size_part ] = stat[ size_part - 1 ];
             size_part += 1;
@@ -508,7 +508,7 @@ void zseb::huffman::__CL_unpack__( zseb_stream &zipfile, zseb_node * tree_ssq, c
 
       if ( idx_sym == 17 ){
          bit = 3 + __read__( zipfile, 3 ); // num repeats
-         std::cout << bit << " ; ";
+         std::cout << 17 << " ; " << ( bit - 3 ) << " ; ";
          while ( bit > 0 ){
             stat[ size_part ] = 0;
             size_part += 1;
@@ -518,7 +518,7 @@ void zseb::huffman::__CL_unpack__( zseb_stream &zipfile, zseb_node * tree_ssq, c
 
       if ( idx_sym == 18 ){
          bit = 11 + __read__( zipfile, 7 ); // num repeats
-         std::cout << bit << " ; ";
+         std::cout << 18 << " ; " << ( bit - 11 ) << " ; ";
          while ( bit > 0 ){
             stat[ size_part ] = 0;
             size_part += 1;
@@ -529,7 +529,7 @@ void zseb::huffman::__CL_unpack__( zseb_stream &zipfile, zseb_node * tree_ssq, c
    }
    std::cout << "]" << std::endl;
 
-   std::cout << "CL un-pack = ["; for ( zseb_16_t cnt = 0; cnt < size_part; cnt++ ){ std::cout << stat[ cnt ] << " ; "; } std::cout << " ]" << std::endl;
+   std::cout << "CL un-pack = [ "; for ( zseb_16_t cnt = 0; cnt < size_part; cnt++ ){ std::cout << stat[ cnt ] << " ; "; } std::cout << " ]" << std::endl;
 
    assert( size == size_part );
 
