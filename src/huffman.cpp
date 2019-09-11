@@ -130,36 +130,23 @@ void zseb::huffman::__write__( zseb_stream &zipfile, const zseb_16_t flush, cons
             significant bit of the code.
    */
 
-   //std::cout << "flush = " << flush << std::endl;
-   //std::cout << "nbits = " << nbits << std::endl;
-
    zseb_16_t ibit = zipfile.ibit;
    zseb_32_t data = zipfile.data;
-   //data = data & ( ( 1U << ibit ) - 1 ); // Mask last ibit bits
-
-   //std::cout << "data = " << data << std::endl;
-   //std::cout << "ibit = " << ibit << std::endl;
 
    for ( zseb_16_t bit = 0; bit < nbits; bit++ ){ // Append biggest first
-      data |= ( ( ( flush >> ( nbits - 1 - bit ) ) & 1U ) << ( ibit + bit ) );
+      data ^= ( ( ( ( ( zseb_32_t )( flush ) ) >> ( nbits - 1 - bit ) ) & 1U ) << ibit );
+      ibit += 1;
    }
-   ibit = ibit + nbits;
-
-   //std::cout << "data = " << data << std::endl;
-   //std::cout << "ibit = " << ibit << std::endl;
 
    while ( ibit >= 8 ){
-      zseb_08_t towrite = ( zseb_08_t )( data & 255U ); // Mask last 8 bits
-      zipfile.file << towrite;
-      data = ( data >> 8 );
-      ibit = ibit - 8;
+      const char towrite = ( zseb_08_t )( data & 255U ); // Mask last 8 bits
+      zipfile.file.write( &towrite, 1 );
+      data  = ( data >> 8 );
+      ibit -= 8;
    }
 
-   //std::cout << "data = " << data << std::endl;
-   //std::cout << "ibit = " << ibit << std::endl;
-
-   zipfile.ibit = ( zseb_08_t )( ibit );
-   zipfile.data = ( zseb_08_t )( data );
+   zipfile.ibit = ibit;
+   zipfile.data = data;
 
 }
 
@@ -178,34 +165,26 @@ zseb_16_t zseb::huffman::__read__( zseb_stream &zipfile, const zseb_16_t nbits )
    zseb_32_t data = zipfile.data; // data ini
 
    while ( ibit < nbits ){
-      zseb_08_t toread;
-      zipfile.file >> toread;
-      zseb_32_t toshift = toread;
-      //std::cout << "huff RD: toread = " << toshift << std::endl;
-      data = ( ( data ) | ( toshift << ibit ) ); // data mid
-      ibit = ibit + 8;
+      char toread;
+      zipfile.file.read( &toread, 1 );
+      zseb_32_t toshift = ( zseb_08_t )( toread );
+      data ^= ( toshift << ibit ); // data mid
+      ibit += 8;
    }
 
    zseb_16_t fetch = 0;
    for ( zseb_16_t bit = 0; bit < nbits; bit++ ){
-      fetch = ( ( fetch << 1 ) | ( data & 1U ) );
+      fetch = ( ( fetch << 1 ) ^ ( data & 1U ) );
       data  = ( data >> 1 ); // data end
+      ibit -= 1;
    }
-   ibit = ibit - nbits;
 
-   zipfile.ibit = ( zseb_08_t )( ibit );
+   zipfile.ibit = ibit;
    zipfile.data = data;
 
    return fetch;
 
 }
-
-
-
-
-
-
-
 
 int zseb::huffman::unpack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack ){
 
@@ -221,64 +200,18 @@ int zseb::huffman::unpack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_
    for ( zseb_16_t cnt = 0; cnt < ZSEB_HUF_COMBI; cnt++ ){ stat_comb[ cnt ] = 0; }
    for ( zseb_16_t cnt = 0; cnt < ZSEB_HUF_SSQ;   cnt++ ){ stat_ssq [ cnt ] = 0; }
 
-   //std::cout << "huff unpack: RD BLK" << std::endl;
-
    const zseb_16_t HEAD  = __read__( zipfile, 3 );
    const zseb_16_t HLIT  = __read__( zipfile, 5 ) + 257;
    const zseb_16_t HDIST = __read__( zipfile, 5 ) + 1;
    const zseb_16_t HCLEN = __read__( zipfile, 4 ) + 4;
-//   std::cout << "HEAD  = " << HEAD  << std::endl;
-//   std::cout << "HLIT  = " << HLIT  << std::endl;
-//   std::cout << "HDIST = " << HDIST << std::endl;
-//   std::cout << "HCLEN = " << HCLEN << std::endl;
    assert( ( HEAD == 6 ) || ( HEAD == 2 ) ); // 6 means LAST BLOCK
 
-   std::cout << "CCL of SSQ = [ ";
    for ( zseb_16_t idx = 0; idx < HCLEN; idx++ ){
       stat_ssq[ idx ] = __read__( zipfile, 3 ); // CCL of reshuffled RLE symbols
-      std::cout << stat_ssq[ idx ] << " ; "; //std::endl;
    }
-   std::cout << "]" << std::endl;
 
    // Build tree: on output tree[ idx ].( info, data ) = bit ( length, sequence ) of SSQ
    __build_tree__( stat_ssq, HCLEN, tree_ssq, work, 'I', ZSEB_MAX_BITS_SSQ );
-
-   std::cout << "tree_ssq : " << std::endl;
-   for ( zseb_16_t idx = 0; idx < ( 2 * HCLEN - 1 ); idx++ ){
-      std::cout << "( idx, length, code, chld0, chld1 ) = ( " << idx << " , "
-                                                              << tree_ssq[ idx ].info << " , "
-                                                              << tree_ssq[ idx ].data << " , "
-                                                              << tree_ssq[ idx ].child[ 0 ] << " , "
-                                                              << tree_ssq[ idx ].child[ 1 ] << " )" << std::endl;
-   }
-
-   /*zseb_node * tree_test = new zseb_node[ ZSEB_HUF_TREE_SSQ  ];
-   __build_tree__( stat_ssq, HCLEN, tree_test, work, 'O', ZSEB_MAX_BITS_SSQ );
-   for ( zseb_16_t idx = 0; idx < HCLEN; idx++ ){
-      const zseb_32_t codon = tree_test[ idx ].data;
-      const zseb_32_t lengt = tree_test[ idx ].info;
-      if ( lengt > 0 ){
-         std::cout << "( idx, tree_out.info, tree_out.data ) = ( " << idx << " ; " << lengt << " ; " << codon << " )" << std::endl;
-         zseb_16_t counter = 0;
-         {
-            zseb_16_t node = 0; // start at root
-            zseb_16_t bit;
-
-            while ( tree_ssq[ node ].child[ 0 ] != tree_ssq[ node ].child[ 1 ] ){ // not a leaf
-               std::cout << "node = " << node << " with code = " << tree_ssq[ node ].data << " and bit length = " << tree_ssq[ node ].info << std::endl;
-               bit = ( ( codon >> ( lengt - 1 - counter ) ) & 1U );
-               node = tree_ssq[ node ].child[ bit ]; // goto child
-               counter++;
-            }
-
-            node = tree_ssq[ node ].child[ 0 ]; // symbol the leaf represents
-            std::cout << "symbol = " << node << std::endl;
-            std::cout << "counter = " << counter << std::endl;
-
-         }
-      }
-   }
-   delete [] tree_test;*/
 
    // Quote from RFC 1951: all CL form a single sequence of HLIT + HDIST + 258 values
    __CL_unpack__( zipfile, tree_ssq, HLIT + HDIST, stat_comb );
@@ -341,18 +274,11 @@ int zseb::huffman::unpack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_
 
 }
 
-
-
-
-
-
-
-
 void zseb::huffman::pack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size, const bool last_blk ){
 
    zseb_16_t * stat_llen = new zseb_16_t[ ZSEB_HUF_COMBI ];
    zseb_16_t * stat_dist = stat_llen + ZSEB_HUF_LLEN;
-   zseb_16_t * stat_ssq  = new zseb_16_t[ ZSEB_HUF_SSQ   ];
+   zseb_16_t * stat_ssq  = new zseb_16_t[ ZSEB_HUF_SSQ ];
    zseb_node * tree_llen = new zseb_node[ ZSEB_HUF_TREE_LLEN ];
    zseb_node * tree_dist = new zseb_node[ ZSEB_HUF_TREE_DIST ];
    zseb_node * tree_ssq  = new zseb_node[ ZSEB_HUF_TREE_SSQ  ];
@@ -391,8 +317,6 @@ void zseb::huffman::pack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t
       stat_llen[ HLIT + count ] = stat_llen[ ZSEB_HUF_LLEN + count ];
    }
 
-   std::cout << "CL of pack = [ "; for ( zseb_16_t cnt = 0; cnt < HLIT + HDIST; cnt++ ){ std::cout << stat_llen[ cnt ] << " ; "; } std::cout << "]" << std::endl;
-
    // Create the RLE for the CL
    const zseb_16_t size_ssq = __ssq_creation__( stat_llen, HLIT + HDIST );
 
@@ -408,39 +332,24 @@ void zseb::huffman::pack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t
    // Build tree: on output tree[ idx ].( info, data ) = bit ( length, sequence )
    __build_tree__( stat_ssq, HCLEN, tree_ssq, work, 'O', ZSEB_MAX_BITS_SSQ );
 
-   std::cout << "CCL of SSQ = [ "; for ( zseb_16_t cnt = 0; cnt < HCLEN; cnt++ ){ std::cout << stat_ssq[ cnt ] << " ; "; } std::cout << "]" << std::endl;
-
    __write__( zipfile, ( ( last_blk ) ? 6 : 2 ), 3 ); // Dynamic header: 110 for last_blk; 010 for non-last_block
    __write__( zipfile, HLIT  - 257, 5 ); // HLIT
    __write__( zipfile, HDIST - 1,   5 ); // HDIST
    __write__( zipfile, HCLEN - 4,   4 ); // HCLEN
 
-   //std::cout << "HEAD  = " << ( ( last_blk ) ? 6 : 2 ) << std::endl; // SAME
-   //std::cout << "HLIT  = " << HLIT << std::endl;  // SAME
-   //std::cout << "HDIST = " << HDIST << std::endl; // SAME
-   //std::cout << "HCLEN = " << HCLEN << std::endl; // SAME
-
-   //exit( 0 ); 
-
    for ( zseb_16_t idx = 0; idx < HCLEN; idx++ ){
       __write__( zipfile, stat_ssq[ idx ], 3 ); // CCL of reshuffled RLE symbols
    }
 
-   std::cout << "SSQ of pack = [ "; for ( zseb_16_t cnt = 0; cnt < size_ssq; cnt++ ){ std::cout << stat_llen[ cnt ] << " ; "; } std::cout << "]" << std::endl;
-
-   std::cout << "Tree pack of SSQ = [ ";
    for ( zseb_16_t idx = 0; idx < size_ssq; idx++ ){
       const zseb_16_t idx_sym = stat_llen[ idx ];
       const zseb_16_t idx_pos = ssq_sym2pos[ idx_sym ];
       __write__( zipfile, tree_ssq[ idx_pos ].data, tree_ssq[ idx_pos ].info ); // RLE symbols in CCL codons
-      std::cout << "( " << tree_ssq[ idx_pos ].data << " , " << tree_ssq[ idx_pos ].info << " ) ;";
       if ( idx_sym >= 16 ){
          __write__( zipfile, stat_llen[ idx + 1 ], bit_ssq[ idx_sym ] ); // Shifts
-         std::cout << "[ " << stat_llen[ idx + 1 ] << " , " << ( zseb_16_t )( bit_ssq[ idx_sym ] ) << " ] ;";
          idx++;
       }
    }
-   std::cout << " ]" << std::endl;
 
    for ( zseb_32_t idx = 0; idx < size; idx++ ){
       if ( dist_pack[ idx ] == ZSEB_MAX_16T ){
@@ -491,8 +400,6 @@ zseb_16_t zseb::huffman::__get_sym__( zseb_stream &zipfile, zseb_node * tree ){
 
 void zseb::huffman::__CL_unpack__( zseb_stream &zipfile, zseb_node * tree_ssq, const zseb_16_t size, zseb_16_t * stat ){
 
-   std::cout << "SSQ un-pack = [ ";
-
    zseb_16_t bit;
    zseb_16_t size_part = 0;
    zseb_16_t idx_pos;
@@ -504,14 +411,12 @@ void zseb::huffman::__CL_unpack__( zseb_stream &zipfile, zseb_node * tree_ssq, c
 
       if ( idx_sym < 16 ){
          stat[ size_part ] = idx_sym;
-         std::cout << stat[ size_part ] << " ; ";
          size_part += 1;
       }
 
       if ( idx_sym == 16 ){
          assert( size_part > 0 );
          bit = 3 + __read__( zipfile, 2 ); // num repeats
-         std::cout << 16 << " ; " << ( bit - 3 ) << " ; ";
          while ( bit > 0 ){
             stat[ size_part ] = stat[ size_part - 1 ];
             size_part += 1;
@@ -521,7 +426,6 @@ void zseb::huffman::__CL_unpack__( zseb_stream &zipfile, zseb_node * tree_ssq, c
 
       if ( idx_sym == 17 ){
          bit = 3 + __read__( zipfile, 3 ); // num repeats
-         std::cout << 17 << " ; " << ( bit - 3 ) << " ; ";
          while ( bit > 0 ){
             stat[ size_part ] = 0;
             size_part += 1;
@@ -531,7 +435,6 @@ void zseb::huffman::__CL_unpack__( zseb_stream &zipfile, zseb_node * tree_ssq, c
 
       if ( idx_sym == 18 ){
          bit = 11 + __read__( zipfile, 7 ); // num repeats
-         std::cout << 18 << " ; " << ( bit - 11 ) << " ; ";
          while ( bit > 0 ){
             stat[ size_part ] = 0;
             size_part += 1;
@@ -540,9 +443,6 @@ void zseb::huffman::__CL_unpack__( zseb_stream &zipfile, zseb_node * tree_ssq, c
       }
 
    }
-   std::cout << "]" << std::endl;
-
-   std::cout << "CL un-pack = [ "; for ( zseb_16_t cnt = 0; cnt < size_part; cnt++ ){ std::cout << stat[ cnt ] << " ; "; } std::cout << " ]" << std::endl;
 
    assert( size == size_part );
 
@@ -688,8 +588,6 @@ void zseb::huffman::__build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb
                for ( zseb_16_t idx2 = idx1 + 1; idx2 < total; idx2++ ){
                   if ( work[ idx2 ] == false ){
                      if ( ( tree[ idx1 ].info == tree[ idx2 ].info ) && ( tree[ idx1 ].data == ( 1U ^ ( tree[ idx2 ].data ) ) ) ){ // Same bit length & only different in last bit
-                        //std::cout << "( idx1, info, data ) = ( " << idx1 << " ; " << tree[ idx1 ].info << " ; " << tree[ idx1 ].data << " )" << std::endl;
-                        //std::cout << "( idx2, info, data ) = ( " << idx2 << " ; " << tree[ idx2 ].info << " ; " << tree[ idx2 ].data << " )" << std::endl;
                         num -= 1;
                         if ( ( ( tree[ idx1 ].data ) & 1U ) == 0 ){ // Last bit of tree[ idx1 ].data is a zero
                            tree[ num ].child[ 0 ] = idx1;
@@ -700,7 +598,6 @@ void zseb::huffman::__build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb
                         }
                         tree[ num ].info = tree[ idx1 ].info - 1; // Bit length one less
                         tree[ num ].data = ( ( tree[ idx1 ].data ) >> 1 ); // Remove last bit
-                        //std::cout << "-->( num, info, data ) = ( " << num << " ; " << tree[ num ].info << " ; " <<  tree[ num ].data << " )" << std::endl;
                         work[ idx1 ] = true;
                         work[ idx2 ] = true;
                         idx2 = total; // Escape inner for loop
@@ -757,18 +654,13 @@ void zseb::huffman::__prefix_lengths__( zseb_16_t * stat, const zseb_16_t size, 
          assert( rare != ZSEB_MAX_16T );
       }
    }
- //zseb_32_t total_freq = 0;
- //for ( zseb_16_t idx = 0; idx < size; idx++ ){ total_freq += stat[ idx ]; }
- //assert( tree[ 2 * num - 2 ].data == total_freq );
 
    // Determine bit lengths --> root has none
    const zseb_16_t root = 2 * num - 2; // Tree contains 2 * num - 1 nodes
    tree[ root ].info = 0; // Bit length
- //tree[ root ].data = 0; // Bit code
    for ( zseb_16_t extra = root; extra >= num; extra-- ){ // Only non-leafs
       for ( zseb_16_t chld = 0; chld < 2; chld++ ){
          tree[ tree[ extra ].child[ chld ] ].info = tree[ extra ].info + 1; // Bit length
-       //tree[ tree[ extra ].child[ chld ] ].data = ( tree[ extra ].data << 1 ) ^ chld; // Bit code
       }
    }
 
@@ -782,7 +674,6 @@ void zseb::huffman::__prefix_lengths__( zseb_16_t * stat, const zseb_16_t size, 
    }
 
    // Move decrements: Least harm? Lengths < ZSEB_MAX_BITS with smallest associated frequency
-   // TODO: Maybe bug here? Can just moving create an inconsistent tree?
    while ( tomove > 0 ){
       zseb_16_t rare = ZSEB_MAX_16T;
       for ( zseb_16_t pack = 0; pack < num; pack++ ){
@@ -791,7 +682,6 @@ void zseb::huffman::__prefix_lengths__( zseb_16_t * stat, const zseb_16_t size, 
                rare = pack; // Assign first relevant encounter
             } else {
                if ( tree[ pack ].data < tree[ rare ].data ){ // smaller frequency
-             //if ( stat[ tree[ pack ].child[ 0 ] ] < stat[ tree[ rare ].child[ 0 ] ] ){ // In case Bit code would have been overwritten above!
                   rare = pack; // Assign even rarer encounter
                }
             }
