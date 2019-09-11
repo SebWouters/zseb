@@ -150,6 +150,23 @@ void zseb::huffman::__write__( zseb_stream &zipfile, const zseb_16_t flush, cons
 
 }
 
+void zseb::huffman::flush( zseb_stream &zipfile ){
+
+   zseb_16_t ibit = zipfile.ibit;
+   zseb_32_t data = zipfile.data;
+
+   while ( ibit > 0 ){
+      const char towrite = ( zseb_08_t )( data & 255U ); // Mask last 8 bits
+      zipfile.file.write( &towrite, 1 );
+      data  = ( data >> 8 );
+      ibit  = ( ( ibit > 8 ) ? ( ibit - 8 ) : 0 );
+   }
+
+   zipfile.ibit = ibit;
+   zipfile.data = data;
+
+}
+
 zseb_16_t zseb::huffman::__read__( zseb_stream &zipfile, const zseb_16_t nbits ){
 
    /* Cfr. write example: P has been retrieved and removed

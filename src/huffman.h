@@ -55,6 +55,8 @@ namespace zseb{
 
          static int unpack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack );
 
+         static void flush( zseb_stream &zipfile );
+
       private:
 
          /***  HELPER FUNCTIONS  ***/

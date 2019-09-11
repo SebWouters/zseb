@@ -106,9 +106,12 @@ void zseb::zseb::zip(){
 
    }
 
+   huffman::flush( zipfile );
    size_zlib = ( zseb_64_t )( zipfile.file.tellg() ) - size_zlib; // Bytes
 
    // TODO: Write GZIP checksums
+
+   zipfile.file.close();
 
    const zseb_64_t size_file = flate->get_file_bytes();
    const zseb_64_t size_lzss = flate->get_lzss_bits();

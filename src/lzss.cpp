@@ -259,7 +259,7 @@ void zseb::lzss::__longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len
    result_len = 1;
    while ( ( pointer != ZSEB_HASH_STOP ) &&
            ( pointer + ZSEB_HISTORY >= position ) && // >= because dist - 1 = position - pointer - 1 < ZSEB_HISTORY is stored
-           ( result_len < ZSEB_LENGTH_MAX ) ){ // TODO: check magic 'long enough' numbers gzip
+           ( result_len < ZSEB_LENGTH_MAX ) ){
       zseb_16_t length = 3;
       bool match = true;
       while ( ( position + length < rd_end ) && ( length < ZSEB_LENGTH_MAX ) && ( match ) ){

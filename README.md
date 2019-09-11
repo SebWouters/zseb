@@ -26,6 +26,19 @@ A GZIP/DEFLATE compatible implementation (in progress).
 
 Playing around.
 
+TODO
+----
+
+   - Quicken up LZSS deflate (long enough match; unthorough lazy eval)
+   - Handle HEAD X00 (no compress) and X01 (predefined symbols)
+   - Command line interface
+   - Checksums
+   - GZIP header/preamble
+   - Huffman to data-containing class
+   - Handle the return == 2 case for Huffman::unpack
+   - Ability to unzip GZIP-created files
+   - Ability to zip to GZIP-processable file
+
 Documentation
 -------------
 
