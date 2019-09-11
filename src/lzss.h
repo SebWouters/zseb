@@ -56,7 +56,7 @@ namespace zseb{
 
          zseb_64_t get_file_bytes() const;
 
-         //inflate: Idea is to unpack pack blocks of given length for  fullfile
+         zseb_32_t get_checksum() const;
 
       private:
 
@@ -67,6 +67,8 @@ namespace zseb{
          zseb_64_t size_file; // Number of bytes in file
 
          zseb_64_t size_lzss; // Number of bits with pure LZSS ( 1-bit diff + 8-bit lit OR 1-bit diff + 8-bit len_shift + 15-bit dist_shift )
+
+         /***  Workspace  ***/
 
          char * frame; // Length ZSEB_FRAME; snippet from file --> [ rd_shift : rd_shift + rd_end ]
 
@@ -95,6 +97,10 @@ namespace zseb{
          inline void __append_lit_encode__( zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current );
 
          inline void __append_len_encode__( zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_16_t dist_shift, const zseb_08_t len_shift );
+
+         /***  CRC32 ***/
+
+         zseb_32_t checksum;
 
    };
 

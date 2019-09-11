@@ -111,6 +111,8 @@ void zseb::zseb::zip(){
 
    // TODO: Write GZIP checksums
 
+   const zseb_32_t chcksm = flate->get_checksum();
+   std::cout << "CRC32 = " << chcksm << std::endl;
    zipfile.file.close();
 
    const zseb_64_t size_file = flate->get_file_bytes();
@@ -156,6 +158,9 @@ void zseb::zseb::unzip(){
    }
 
    flate->flush();
+
+   const zseb_32_t chcksm = flate->get_checksum();
+   std::cout << "CRC32 = " << chcksm << std::endl;
 
    // TODO: Verify GZIP checksums
 

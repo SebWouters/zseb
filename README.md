@@ -38,6 +38,7 @@ TODO
    - Handle the return == 2 case for Huffman::unpack
    - Ability to unzip GZIP-created files
    - Ability to zip to GZIP-processable file
+   - Write documentation
 
 Documentation
 -------------

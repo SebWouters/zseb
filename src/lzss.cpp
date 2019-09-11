@@ -20,6 +20,7 @@
 #include <assert.h>
 #include "huffman.h"
 #include "zseb.h"
+#include "crc32.h"
 
 zseb::lzss::lzss( std::string fullfile, const char modus ){
 
@@ -27,6 +28,7 @@ zseb::lzss::lzss( std::string fullfile, const char modus ){
 
    size_lzss = 0;
    size_file = 0;
+   checksum  = 0;
    frame     = NULL;
    hash_last = NULL;
    hash_ptrs = NULL;
@@ -84,6 +86,7 @@ zseb::lzss::~lzss(){
 void zseb::lzss::flush(){
 
    file.write( frame, rd_current );
+   checksum = crc32::update( checksum, frame, rd_current );
    rd_current = 0;
    size_file = ( zseb_64_t )( file.tellg() );
 
@@ -114,6 +117,7 @@ void zseb::lzss::inflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zs
       if ( rd_current > ZSEB_TRIGGER ){
 
          file.write( frame, ZSEB_SHIFT );
+         checksum = crc32::update( checksum, frame, ZSEB_SHIFT );
          for ( zseb_32_t cnt = 0; cnt < ( rd_current - ZSEB_SHIFT ); cnt++ ){
             frame[ cnt ] = frame[ ZSEB_SHIFT + cnt ];
          }
@@ -211,6 +215,8 @@ zseb_64_t zseb::lzss::get_lzss_bits() const{ return size_lzss; }
 
 zseb_64_t zseb::lzss::get_file_bytes() const{ return size_file; }
 
+zseb_32_t zseb::lzss::get_checksum() const{ return checksum; }
+
 void zseb::lzss::__shift_left__(){
 
    assert( rd_current <  rd_end );
@@ -240,6 +246,7 @@ void zseb::lzss::__readin__(){
 
    const zseb_32_t current_read = ( ( rd_shift + ZSEB_FRAME > size_file ) ? ( size_file - rd_shift - rd_end ) : ( ZSEB_FRAME - rd_end ) );
    file.read( frame + rd_end, current_read );
+   checksum = crc32::update( checksum, frame + rd_end, current_read );
    rd_end += current_read;
 
 }
