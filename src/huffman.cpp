@@ -280,14 +280,14 @@ int zseb::huffman::unpack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_
       return 2; // buffers not large enough
    }
 
-   return ( ( HEAD == 6 ) ? 1 : 0 );
-
    delete [] stat_comb;
    delete [] stat_ssq;
    delete [] tree_llen;
    delete [] tree_dist;
    delete [] tree_ssq;
    delete [] work;
+
+   return ( ( HEAD == 6 ) ? 1 : 0 );
 
 }
 
