@@ -112,36 +112,26 @@ zseb_08_t zseb::huffman::__dist_code__( const zseb_16_t dist_shft ){
 void zseb::huffman::__write__( zseb_stream &zipfile, const zseb_16_t flush, const zseb_16_t nbits ){
 
    /* Data ini : [ __ __ __ P5 P4 P3 P2 P1 ], ibit = 5
-      Flush    = [ __ __ N1 N2 N3 N4 N5 N6 ], nbits = 6
-      Data mid : [ __ __ __ __ __ N6 N5 N4 ][ N3 N2 N1 P5 P4 P3 P3 P1 ], ibit = 11
+      Flush    = [ __ __ N6 N5 N4 N3 N2 N1 ], nbits = 6
+      Data mid : [ __ __ __ __ __ N6 N5 N4 ][ N3 N2 N1 P5 P4 P3 P2 P1 ], ibit = 11
       Stream <<  [ N3 N2 N1 P5 P4 P3 P2 P1 ]
       Data end : [ __ __ __ __ __ N6 N5 N4 ], ibit = 3
    */
 
-   /* Quote from RFC 1951:
-
-          * Data elements are packed into bytes in order of
-            increasing bit number within the byte, i.e., starting
-            with the least-significant bit of the byte.
-          * Data elements other than Huffman codes are packed
-            starting with the least-significant bit of the data
-            element.
-          * Huffman codes are packed starting with the most-
-            significant bit of the code.
-   */
+   // Regular data = regular order: LSB of flush nearest to LSB of data
+   // Huffman codes are read one bit at a time: reverse code upon creation of Huffman tree with modus 'O'utput
 
    zseb_16_t ibit = zipfile.ibit;
-   zseb_32_t data = zipfile.data;
+   zseb_32_t data = zipfile.data; // data ini
 
-   for ( zseb_16_t bit = 0; bit < nbits; bit++ ){ // Append biggest first
-      data ^= ( ( ( ( ( zseb_32_t )( flush ) ) >> ( nbits - 1 - bit ) ) & 1U ) << ibit );
-      ibit += 1;
-   }
+   zseb_32_t temp = flush; // flush can be up to 15 bits
+   data  = data ^ ( temp << ibit ); // data mid
+   ibit += nbits;
 
    while ( ibit >= 8 ){
       const char towrite = ( zseb_08_t )( data & 255U ); // Mask last 8 bits
       zipfile.file.write( &towrite, 1 );
-      data  = ( data >> 8 );
+      data  = ( data >> 8 ); // data end
       ibit -= 8;
    }
 
@@ -174,7 +164,7 @@ zseb_16_t zseb::huffman::__read__( zseb_stream &zipfile, const zseb_16_t nbits )
       nbits = 6 > ibit = 3
       Stream >>  [ XX XX XX XX XX N6 N5 N4 ]
       Data mid : [ __ __ __ __ __ XX XX XX ][ XX XX N6 N5 N4 N3 N2 N1 ], ibit = 11
-      Fetch    = [ __ __ N1 N2 N3 N4 N5 N6 ], nbits = 6
+      Fetch    = [ __ __ N6 N5 N4 N3 N2 N1 ], nbits = 6
       Data end : [ __ __ __ XX XX XX XX XX ], ibit = 5
    */
 
@@ -189,12 +179,9 @@ zseb_16_t zseb::huffman::__read__( zseb_stream &zipfile, const zseb_16_t nbits )
       ibit += 8;
    }
 
-   zseb_16_t fetch = 0;
-   for ( zseb_16_t bit = 0; bit < nbits; bit++ ){
-      fetch = ( ( fetch << 1 ) ^ ( data & 1U ) );
-      data  = ( data >> 1 ); // data end
-      ibit -= 1;
-   }
+   const zseb_16_t fetch = ( data & ( ( 1U << nbits ) - 1 ) ); // mask last nbits bits
+   data  = ( data >> nbits ); // data end
+   ibit -= nbits;
 
    zipfile.ibit = ibit;
    zipfile.data = data;
@@ -544,6 +531,19 @@ zseb_16_t zseb::huffman::__ssq_creation__( zseb_16_t * stat, const zseb_16_t siz
 
 }
 
+zseb_16_t zseb::huffman::__bit_reverse__( zseb_16_t code, const zseb_16_t nbits ){
+
+   zseb_16_t result = 0;
+
+   for ( zseb_16_t bit = 0; bit < nbits; bit++ ){
+      result = ( result << 1 ) | ( code & 1U ); // append LSB of code
+      code   = ( code >> 1 ); // remove LSB from code
+   }
+
+   return result;
+
+}
+
 void zseb::huffman::__build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, bool * work, const char option, const zseb_16_t ZSEB_MAX_BITS ){
 
    // Paragraph 3.2.2 RFC 1951
@@ -569,7 +569,7 @@ void zseb::huffman::__build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb
          tree[ idx ].child[ 0 ] = idx;   // llen_code or dist_code
          tree[ idx ].child[ 1 ] = idx;   // llen_code or dist_code
          tree[ idx ].info = stat[ idx ]; // Bit length
-         tree[ idx ].data = next_code[ stat[ idx ] ]; // Bit sequence
+         tree[ idx ].data = __bit_reverse__( next_code[ stat[ idx ] ], stat[ idx ] ); // !!! Bit sequence in REVERSE !!! ( LSB read in first in __read__ )
          next_code[ stat[ idx ] ] += 1;  // If stat[ idx ] > 0: OK, if stat[ idx ] == 0: never accessed, also OK
       }
    }
@@ -589,7 +589,7 @@ void zseb::huffman::__build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb
             tree[ num ].child[ 0 ] = idx;
             tree[ num ].child[ 1 ] = idx; // Same code: leaf node & symbol llen_code or dist_code
             tree[ num ].info = stat[ idx ]; // Bit length
-            tree[ num ].data = next_code[ stat[ idx ] ]; // Bit sequence
+            tree[ num ].data = next_code[ stat[ idx ] ]; // !!! Bit sequence NOT in reverse !!! ( tree[ x ].data never read during 'I'nput )
             next_code[ stat[ idx ] ] += 1;
             num += 1;
          }

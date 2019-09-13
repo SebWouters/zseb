@@ -65,6 +65,8 @@ namespace zseb{
 
          static inline zseb_16_t __read__( zseb_stream &zipfile, const zseb_16_t nbits );
 
+         static inline zseb_16_t __bit_reverse__( zseb_16_t code, const zseb_16_t nbits );
+
          static void __prefix_lengths__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, const zseb_16_t ZSEB_MAX_BITS );
 
          static void __build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, bool * work, const char option, const zseb_16_t ZSEB_MAX_BITS );
