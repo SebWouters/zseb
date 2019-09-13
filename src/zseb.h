@@ -26,6 +26,7 @@
 
 #include "dtypes.h"
 #include "lzss.h"
+#include "huffman.h"
 
 #define ZSEB_PACK_SIZE      16392U     // 2^15 + 2^3:  important that 2^3  >= 4 and that ZSEB_PACK_TRIGGER < 2^16 !
 #define ZSEB_PACK_TRIGGER   16384U     // 2^14
@@ -49,6 +50,8 @@ namespace zseb{
       private:
 
          lzss * flate;
+
+         huffman * coder;
 
          zseb_stream zipfile;
 

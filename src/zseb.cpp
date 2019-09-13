@@ -21,7 +21,6 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#include "huffman.h"
 #include "zseb.h"
 
 zseb::zseb::zseb( std::string toread, std::string towrite, const char modus ){
@@ -34,12 +33,14 @@ zseb::zseb::zseb( std::string toread, std::string towrite, const char modus ){
    assert( ( modus == 'Z' ) || ( modus == 'U' ) );
 
    flate     = NULL;
+   coder     = NULL;
    llen_pack = NULL;
    dist_pack = NULL;
 
    if ( modus == 'Z' ){
 
       flate = new lzss( toread, modus );
+      coder = new huffman();
 
       zipfile.file.open( towrite.c_str(), std::ios::out|std::ios::binary|std::ios::trunc );
       zipfile.data = 0;
@@ -54,6 +55,7 @@ zseb::zseb::zseb( std::string toread, std::string towrite, const char modus ){
    if ( modus == 'U' ){
 
       flate = new lzss( towrite, modus );
+      coder = new huffman();
 
       zipfile.file.open( toread.c_str(), std::ios::in|std::ios::binary ); // At begin
       zipfile.data = 0;
@@ -73,6 +75,7 @@ zseb::zseb::~zseb(){
 
    if ( zipfile.file.is_open() ){ zipfile.file.close(); }
    if ( flate != NULL ){ delete flate; }
+   if ( coder != NULL ){ delete coder; }
    if ( llen_pack != NULL ){ delete [] llen_pack; }
    if ( dist_pack != NULL ){ delete [] dist_pack; }
 
@@ -98,7 +101,7 @@ void zseb::zseb::zip(){
       time_lzss += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 
       gettimeofday( &start, NULL );
-      huffman::pack( zipfile, llen_pack, dist_pack, wr_current, last_block );
+      coder->pack( zipfile, llen_pack, dist_pack, wr_current, last_block );
       gettimeofday( &end, NULL );
       time_huff += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 
@@ -106,7 +109,7 @@ void zseb::zseb::zip(){
 
    }
 
-   huffman::flush( zipfile );
+   coder->flush( zipfile );
    size_zlib = ( zseb_64_t )( zipfile.file.tellg() ) - size_zlib; // Bytes
 
    // TODO: Write GZIP checksums
@@ -143,7 +146,7 @@ void zseb::zseb::unzip(){
    while ( last_block == 0 ){
 
       gettimeofday( &start, NULL );
-      last_block = huffman::unpack( zipfile, llen_pack, dist_pack, wr_current, ZSEB_UNPACK_SIZE );
+      last_block = coder->unpack( zipfile, llen_pack, dist_pack, wr_current, ZSEB_UNPACK_SIZE );
       assert( last_block < 2 ); // TODO: If last_block 2, then create longer llen_pack and dist_pack and copy previous wr_current data
       gettimeofday( &end, NULL );
       time_huff += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );

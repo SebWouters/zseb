@@ -85,6 +85,28 @@ const zseb_08_t zseb::huffman::ssq_sym2pos[ 19 ] = {  3, 17, 15, 13, 11, 9, 7, 5
 
 const zseb_08_t zseb::huffman::ssq_pos2sym[ 19 ] = { 16, 17, 18,  0,  8, 7, 9, 6, 10, 5, 11,  4, 12,  3, 13,  2, 14, 1, 15 }; // at pos = 0, sym = '16' (rep previous)
 
+zseb::huffman::huffman(){
+
+   stat_comb = new zseb_16_t[ ZSEB_HUF_COMBI ];
+   stat_ssq  = new zseb_16_t[ ZSEB_HUF_SSQ   ];
+   tree_llen = new zseb_node[ ZSEB_HUF_TREE_LLEN ];
+   tree_dist = new zseb_node[ ZSEB_HUF_TREE_DIST ];
+   tree_ssq  = new zseb_node[ ZSEB_HUF_TREE_SSQ  ];
+   work      = new      bool[ ZSEB_HUF_TREE_LLEN ];
+
+}
+
+zseb::huffman::~huffman(){
+
+   delete [] stat_comb;
+   delete [] stat_ssq;
+   delete [] tree_llen;
+   delete [] tree_dist;
+   delete [] tree_ssq;
+   delete [] work;
+
+}
+
 zseb_16_t zseb::huffman::__len_code__( const zseb_08_t len_shft ){
 
    return ( ZSEB_256_16T ^ ( 1 + map_len[ len_shft ] ) );
@@ -194,13 +216,6 @@ int zseb::huffman::unpack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_
 
    assert( wr_current == 0 ); // TODO: If not zero: last returned 2, want to continue: switch from purely static class to data --> reuse trees
 
-   zseb_16_t * stat_comb = new zseb_16_t[ ZSEB_HUF_COMBI ];
-   zseb_16_t * stat_ssq  = new zseb_16_t[ ZSEB_HUF_SSQ   ];
-   zseb_node * tree_llen = new zseb_node[ ZSEB_HUF_TREE_LLEN ];
-   zseb_node * tree_dist = new zseb_node[ ZSEB_HUF_TREE_DIST ];
-   zseb_node * tree_ssq  = new zseb_node[ ZSEB_HUF_TREE_SSQ  ];
-   bool      * work      = new      bool[ ZSEB_HUF_TREE_LLEN ];
-
    for ( zseb_16_t cnt = 0; cnt < ZSEB_HUF_COMBI; cnt++ ){ stat_comb[ cnt ] = 0; }
    for ( zseb_16_t cnt = 0; cnt < ZSEB_HUF_SSQ;   cnt++ ){ stat_ssq [ cnt ] = 0; }
 
@@ -267,28 +282,16 @@ int zseb::huffman::unpack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_
       return 2; // buffers not large enough
    }
 
-   delete [] stat_comb;
-   delete [] stat_ssq;
-   delete [] tree_llen;
-   delete [] tree_dist;
-   delete [] tree_ssq;
-   delete [] work;
-
    return ( ( HEAD == 6 ) ? 1 : 0 );
 
 }
 
 void zseb::huffman::pack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size, const bool last_blk ){
 
-   zseb_16_t * stat_llen = new zseb_16_t[ ZSEB_HUF_COMBI ];
+   zseb_16_t * stat_llen = stat_comb;
    zseb_16_t * stat_dist = stat_llen + ZSEB_HUF_LLEN;
-   zseb_16_t * stat_ssq  = new zseb_16_t[ ZSEB_HUF_SSQ ];
-   zseb_node * tree_llen = new zseb_node[ ZSEB_HUF_TREE_LLEN ];
-   zseb_node * tree_dist = new zseb_node[ ZSEB_HUF_TREE_DIST ];
-   zseb_node * tree_ssq  = new zseb_node[ ZSEB_HUF_TREE_SSQ  ];
-   bool      * work      = new      bool[ ZSEB_HUF_TREE_LLEN ];
 
-   for ( zseb_16_t cnt = 0; cnt < ZSEB_HUF_COMBI; cnt++ ){ stat_llen[ cnt ] = 0; }
+   for ( zseb_16_t cnt = 0; cnt < ZSEB_HUF_COMBI; cnt++ ){ stat_comb[ cnt ] = 0; }
    for ( zseb_16_t cnt = 0; cnt < ZSEB_HUF_SSQ;   cnt++ ){ stat_ssq [ cnt ] = 0; }
 
    // Stop codon also needs a huffman code
@@ -318,14 +321,14 @@ void zseb::huffman::pack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t
 
    // Quote from RFC 1951: all code lengths form a single sequence of HLIT + HDIST + 258 values
    for ( zseb_16_t count = 0; count < HDIST; count++ ){
-      stat_llen[ HLIT + count ] = stat_llen[ ZSEB_HUF_LLEN + count ];
+      stat_comb[ HLIT + count ] = stat_comb[ ZSEB_HUF_LLEN + count ];
    }
 
    // Create the RLE for the CL
-   const zseb_16_t size_ssq = __ssq_creation__( stat_llen, HLIT + HDIST );
+   const zseb_16_t size_ssq = __ssq_creation__( stat_comb, HLIT + HDIST );
 
    // Gather statistics on RLE: If sym >= 16, a number to be represented in bit sequence follows
-   for ( zseb_16_t count = 0; count < size_ssq; count++ ){ stat_ssq[ ssq_sym2pos[ stat_llen[ count ] ] ] += 1; if ( stat_llen[ count ] >= 16 ){ count++; } }
+   for ( zseb_16_t count = 0; count < size_ssq; count++ ){ stat_ssq[ ssq_sym2pos[ stat_comb[ count ] ] ] += 1; if ( stat_comb[ count ] >= 16 ){ count++; } }
 
    // Huffman CCL: input(stat) = freq; output(stat) = CCL
    __prefix_lengths__( stat_ssq, ZSEB_HUF_SSQ, tree_ssq, ZSEB_MAX_BITS_SSQ ); // Header info size depends on ( HLIT, HDIST, HCLEN )
@@ -346,11 +349,11 @@ void zseb::huffman::pack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t
    }
 
    for ( zseb_16_t idx = 0; idx < size_ssq; idx++ ){
-      const zseb_16_t idx_sym = stat_llen[ idx ];
+      const zseb_16_t idx_sym = stat_comb[ idx ];
       const zseb_16_t idx_pos = ssq_sym2pos[ idx_sym ];
       __write__( zipfile, tree_ssq[ idx_pos ].data, tree_ssq[ idx_pos ].info ); // RLE symbols in CCL codons
       if ( idx_sym >= 16 ){
-         __write__( zipfile, stat_llen[ idx + 1 ], bit_ssq[ idx_sym ] ); // Shifts
+         __write__( zipfile, stat_comb[ idx + 1 ], bit_ssq[ idx_sym ] ); // Shifts
          idx++;
       }
    }
@@ -378,13 +381,6 @@ void zseb::huffman::pack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t
    }
    __write__( zipfile, tree_llen[ ZSEB_LITLEN ].data, tree_llen[ ZSEB_LITLEN ].info ); // Stop codon
 
-   delete [] stat_llen;
-   delete [] stat_ssq;
-   delete [] tree_llen;
-   delete [] tree_dist;
-   delete [] tree_ssq;
-   delete [] work;
-
 }
 
 zseb_16_t zseb::huffman::__get_sym__( zseb_stream &zipfile, zseb_node * tree ){
@@ -402,7 +398,7 @@ zseb_16_t zseb::huffman::__get_sym__( zseb_stream &zipfile, zseb_node * tree ){
 
 }
 
-void zseb::huffman::__CL_unpack__( zseb_stream &zipfile, zseb_node * tree_ssq, const zseb_16_t size, zseb_16_t * stat ){
+void zseb::huffman::__CL_unpack__( zseb_stream &zipfile, zseb_node * tree, const zseb_16_t size, zseb_16_t * stat ){
 
    zseb_16_t bit;
    zseb_16_t size_part = 0;
@@ -410,7 +406,7 @@ void zseb::huffman::__CL_unpack__( zseb_stream &zipfile, zseb_node * tree_ssq, c
    zseb_16_t idx_sym;
 
    while ( size_part < size ){
-      idx_pos = __get_sym__( zipfile, tree_ssq );
+      idx_pos = __get_sym__( zipfile, tree );
       idx_sym = ssq_pos2sym[ idx_pos ];
 
       if ( idx_sym < 16 ){
@@ -544,7 +540,7 @@ zseb_16_t zseb::huffman::__bit_reverse__( zseb_16_t code, const zseb_16_t nbits 
 
 }
 
-void zseb::huffman::__build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, bool * work, const char option, const zseb_16_t ZSEB_MAX_BITS ){
+void zseb::huffman::__build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, bool * temp, const char option, const zseb_16_t ZSEB_MAX_BITS ){
 
    // Paragraph 3.2.2 RFC 1951
 
@@ -596,14 +592,14 @@ void zseb::huffman::__build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb
       }
       assert( num == total );
 
-      for ( zseb_16_t idx = 0; idx < total; idx++ ){ work[ idx ] = false; }
+      for ( zseb_16_t idx = 0; idx < total; idx++ ){ temp[ idx ] = false; }
 
       num = num_nonzero - 1;
       while ( num != 0 ){
          for ( zseb_16_t idx1 = num; idx1 < total; idx1++ ){
-            if ( work[ idx1 ] == false ){
+            if ( temp[ idx1 ] == false ){
                for ( zseb_16_t idx2 = idx1 + 1; idx2 < total; idx2++ ){
-                  if ( work[ idx2 ] == false ){
+                  if ( temp[ idx2 ] == false ){
                      if ( ( tree[ idx1 ].info == tree[ idx2 ].info ) && ( tree[ idx1 ].data == ( 1U ^ ( tree[ idx2 ].data ) ) ) ){ // Same bit length & only different in last bit
                         num -= 1;
                         if ( ( ( tree[ idx1 ].data ) & 1U ) == 0 ){ // Last bit of tree[ idx1 ].data is a zero
@@ -615,8 +611,8 @@ void zseb::huffman::__build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb
                         }
                         tree[ num ].info = tree[ idx1 ].info - 1; // Bit length one less
                         tree[ num ].data = ( ( tree[ idx1 ].data ) >> 1 ); // Remove last bit
-                        work[ idx1 ] = true;
-                        work[ idx2 ] = true;
+                        temp[ idx1 ] = true;
+                        temp[ idx2 ] = true;
                         idx2 = total; // Escape inner for loop
                      }
                   }
@@ -625,7 +621,7 @@ void zseb::huffman::__build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb
          }
       }
       assert( tree[ 0 ].info == 0 );
-      for ( zseb_16_t idx1 = 1; idx1 < total; idx1++ ){ assert( work[ idx1 ] == true ); }
+      for ( zseb_16_t idx1 = 1; idx1 < total; idx1++ ){ assert( temp[ idx1 ] == true ); }
    }
 
 }

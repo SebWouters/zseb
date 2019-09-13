@@ -51,13 +51,31 @@ namespace zseb{
 
       public:
 
-         static void  pack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size, const bool last_blk );
+         huffman();
 
-         static int unpack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack );
+         virtual ~huffman();
+
+         void  pack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size, const bool last_blk );
+
+         int unpack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack );
 
          static void flush( zseb_stream &zipfile );
 
       private:
+
+         /***  DATA: advantage of switching to data class, is that when buffers are too short, the trees are still in memory :-)  ***/
+
+         zseb_16_t * stat_comb; // Length ZSEB_HUF_COMBI: for stat_llen = stat_comb + 0 & stat_dist = stat_comb + HLIT
+
+         zseb_16_t * stat_ssq;  // Length ZSEB_HUF_SSQ
+
+         zseb_node * tree_llen; // Length ZSEB_HUF_TREE_LLEN
+
+         zseb_node * tree_dist; // Length ZSEB_HUF_TREE_DIST
+
+         zseb_node * tree_ssq;  // Length ZSEB_HUF_TREE_SSQ
+
+         bool * work; // Length ZSEB_HUF_TREE_LLEN; purely for combinations of zseb_node's in __build_tree__ modus 'I'
 
          /***  HELPER FUNCTIONS  ***/
 
@@ -69,11 +87,11 @@ namespace zseb{
 
          static void __prefix_lengths__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, const zseb_16_t ZSEB_MAX_BITS );
 
-         static void __build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, bool * work, const char option, const zseb_16_t ZSEB_MAX_BITS );
+         static void __build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, bool * temp, const char option, const zseb_16_t ZSEB_MAX_BITS );
 
          static zseb_16_t __ssq_creation__( zseb_16_t * stat, const zseb_16_t size );
 
-         static void __CL_unpack__( zseb_stream &zipfile, zseb_node * tree_ssq, const zseb_16_t size, zseb_16_t * stat );
+         static void __CL_unpack__( zseb_stream &zipfile, zseb_node * tree, const zseb_16_t size, zseb_16_t * stat );
 
          static zseb_16_t __get_sym__( zseb_stream &zipfile, zseb_node * tree );
 

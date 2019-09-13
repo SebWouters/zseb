@@ -34,8 +34,9 @@ TODO
    - Command line interface
    - Checksums
    - GZIP header/preamble
-   - Huffman to data-containing class
    - Handle the return == 2 case for Huffman::unpack
+   - Add handle return == 3 (?) for X00 (no compress) for Huffman::unpack
+   - Create Stream class to package files?
    - Ability to unzip GZIP-created files
    - Ability to zip to GZIP-processable file
    - Write documentation
