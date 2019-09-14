@@ -41,6 +41,63 @@ TODO
    - Ability to zip to GZIP-processable file
    - Write documentation
 
+Idea: hash chain hierarchy
+--------------------------
+
+ASCII art:
+
+    abcd1abce2abcf3abcg4abch5abci6abcj7abck8abcl9abcg0abcd1abce2abcf3abcg4abch5abci6abcj7abck8abcl9abcg0
+                   |                             |                   |    |    |    |    |    |    |
+                   |                             |                   |    |    |    |    |    |    |
+                   |                             |                   <----<----<----<----<----<----|
+                   |                             |                   ptr6 ptr5 ptr4 ptr3 ptr2 ptr1 i    using prev3
+                   |                             |                   |
+    ---------------<-----------------------------<--------------------
+                   ptr8                          ptr7                                                   using prev4
+
+
+Code example:
+
+    loop i {
+    
+        ptr     = head[ abc ] // ( == ptr1 )
+        max_len = 1
+        max_ptr = STOP
+        spc_ptr = STOP
+    
+        while (( ptr != STOP ) && ( max_len < 258 )){
+    
+            len = (( max_len > 3 ) ? 4 : 3 )
+            match = true
+    
+            while ( match && ( len < 258 ) ){
+                if ( buffer[ ptr + len ] == buffer[ i + len ] ){
+                    len += 1
+                } else {
+                    match = false
+                }
+            }
+            if ( len > max_len ){
+                max_len = len
+                max_ptr = ptr
+            }
+    
+            if (( spc_ptr == STOP ) && ( max_len > 3 )){
+                spc_ptr = ptr // ( == ptr6 )
+            }
+    
+            ptr = (( max_len == 3 ) ? prev3[ ptr ] : prev4[ ptr ] )
+    
+        }
+    
+        // Some output stuff depending on max_len & max_ptr, perhaps lazy matching
+    
+        prev3[ i ] = head[ abc ] // ( == ptr1 )
+        prev4[ i ] = spc_ptr // ( == ptr6, or STOP if not found in relevant history window with prev3 )
+        head[ abc ] = i
+    
+    }
+
 Documentation
 -------------
 
