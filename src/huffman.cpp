@@ -131,102 +131,21 @@ zseb_08_t zseb::huffman::__dist_code__( const zseb_16_t dist_shft ){
 
 }
 
-void zseb::huffman::__write__( zseb_stream &zipfile, const zseb_16_t flush, const zseb_16_t nbits ){
-
-   /* Data ini : [ __ __ __ P5 P4 P3 P2 P1 ], ibit = 5
-      Flush    = [ __ __ N6 N5 N4 N3 N2 N1 ], nbits = 6
-      Data mid : [ __ __ __ __ __ N6 N5 N4 ][ N3 N2 N1 P5 P4 P3 P2 P1 ], ibit = 11
-      Stream <<  [ N3 N2 N1 P5 P4 P3 P2 P1 ]
-      Data end : [ __ __ __ __ __ N6 N5 N4 ], ibit = 3
-   */
-
-   // Regular data = regular order: LSB of flush nearest to LSB of data
-   // Huffman codes are read one bit at a time: reverse code upon creation of Huffman tree with modus 'O'utput
-
-   zseb_16_t ibit = zipfile.ibit;
-   zseb_32_t data = zipfile.data; // data ini
-
-   zseb_32_t temp = flush; // flush can be up to 15 bits
-   data  = data ^ ( temp << ibit ); // data mid
-   ibit += nbits;
-
-   while ( ibit >= 8 ){
-      const char towrite = ( zseb_08_t )( data & 255U ); // Mask last 8 bits
-      zipfile.file.write( &towrite, 1 );
-      data  = ( data >> 8 ); // data end
-      ibit -= 8;
-   }
-
-   zipfile.ibit = ibit;
-   zipfile.data = data;
-
-}
-
-void zseb::huffman::flush( zseb_stream &zipfile ){
-
-   zseb_16_t ibit = zipfile.ibit;
-   zseb_32_t data = zipfile.data;
-
-   while ( ibit > 0 ){
-      const char towrite = ( zseb_08_t )( data & 255U ); // Mask last 8 bits
-      zipfile.file.write( &towrite, 1 );
-      data  = ( data >> 8 );
-      ibit  = ( ( ibit > 8 ) ? ( ibit - 8 ) : 0 );
-   }
-
-   zipfile.ibit = ibit;
-   zipfile.data = data;
-
-}
-
-zseb_16_t zseb::huffman::__read__( zseb_stream &zipfile, const zseb_16_t nbits ){
-
-   /* Cfr. write example: P has been retrieved and removed
-      Data ini : [ __ __ __ __ __ N3 N2 N1 ], ibit = 3
-      nbits = 6 > ibit = 3
-      Stream >>  [ XX XX XX XX XX N6 N5 N4 ]
-      Data mid : [ __ __ __ __ __ XX XX XX ][ XX XX N6 N5 N4 N3 N2 N1 ], ibit = 11
-      Fetch    = [ __ __ N6 N5 N4 N3 N2 N1 ], nbits = 6
-      Data end : [ __ __ __ XX XX XX XX XX ], ibit = 5
-   */
-
-   zseb_16_t ibit = zipfile.ibit;
-   zseb_32_t data = zipfile.data; // data ini
-
-   while ( ibit < nbits ){
-      char toread;
-      zipfile.file.read( &toread, 1 );
-      zseb_32_t toshift = ( zseb_08_t )( toread );
-      data ^= ( toshift << ibit ); // data mid
-      ibit += 8;
-   }
-
-   const zseb_16_t fetch = ( data & ( ( 1U << nbits ) - 1 ) ); // mask last nbits bits
-   data  = ( data >> nbits ); // data end
-   ibit -= nbits;
-
-   zipfile.ibit = ibit;
-   zipfile.data = data;
-
-   return fetch;
-
-}
-
-int zseb::huffman::unpack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack ){
+int zseb::huffman::unpack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack ){
 
    assert( wr_current == 0 ); // TODO: If not zero: last returned 2, want to continue: switch from purely static class to data --> reuse trees
 
    for ( zseb_16_t cnt = 0; cnt < ZSEB_HUF_COMBI; cnt++ ){ stat_comb[ cnt ] = 0; }
    for ( zseb_16_t cnt = 0; cnt < ZSEB_HUF_SSQ;   cnt++ ){ stat_ssq [ cnt ] = 0; }
 
-   const zseb_16_t HEAD  = __read__( zipfile, 3 );
-   const zseb_16_t HLIT  = __read__( zipfile, 5 ) + 257;
-   const zseb_16_t HDIST = __read__( zipfile, 5 ) + 1;
-   const zseb_16_t HCLEN = __read__( zipfile, 4 ) + 4;
+   const zseb_16_t HEAD  = ( zseb_16_t )( zipfile->read( 3 ) );
+   const zseb_16_t HLIT  = ( zseb_16_t )( zipfile->read( 5 ) ) + 257;
+   const zseb_16_t HDIST = ( zseb_16_t )( zipfile->read( 5 ) ) + 1;
+   const zseb_16_t HCLEN = ( zseb_16_t )( zipfile->read( 4 ) ) + 4;
    assert( ( HEAD == 6 ) || ( HEAD == 2 ) ); // 6 means LAST BLOCK
 
    for ( zseb_16_t idx = 0; idx < HCLEN; idx++ ){
-      stat_ssq[ idx ] = __read__( zipfile, 3 ); // CCL of reshuffled RLE symbols
+      stat_ssq[ idx ] = ( zseb_16_t )( zipfile->read( 3 ) ); // CCL of reshuffled RLE symbols
    }
 
    // Build tree: on output tree[ idx ].( info, data ) = bit ( length, sequence ) of SSQ
@@ -260,14 +179,14 @@ int zseb::huffman::unpack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_
          zseb_16_t len_shft = __len_base__( llen_code );
          zseb_16_t len_nbit = __len_bits__( llen_code );
          if ( len_nbit > 0 ){
-            len_shft = len_shft + __read__( zipfile, len_nbit );
+            len_shft = len_shft + ( zseb_16_t )( zipfile->read( len_nbit ) );
          }
 
          zseb_16_t dist_code = __get_sym__( zipfile, tree_dist );
          zseb_16_t dist_shft = add_dist[ dist_code ];
          zseb_16_t dist_nbit = bit_dist[ dist_code ];
          if ( dist_nbit > 0 ){
-            dist_shft = dist_shft + __read__( zipfile, dist_nbit );
+            dist_shft = dist_shft + ( zseb_16_t )( zipfile->read( dist_nbit ) );
          }
 
          llen_pack[ wr_current ] = len_shft;
@@ -286,7 +205,7 @@ int zseb::huffman::unpack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_
 
 }
 
-void zseb::huffman::pack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size, const bool last_blk ){
+void zseb::huffman::pack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size, const bool last_blk ){
 
    zseb_16_t * stat_llen = stat_comb;
    zseb_16_t * stat_dist = stat_llen + ZSEB_HUF_LLEN;
@@ -339,21 +258,21 @@ void zseb::huffman::pack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t
    // Build tree: on output tree[ idx ].( info, data ) = bit ( length, sequence )
    __build_tree__( stat_ssq, HCLEN, tree_ssq, work, 'O', ZSEB_MAX_BITS_SSQ );
 
-   __write__( zipfile, ( ( last_blk ) ? 6 : 2 ), 3 ); // Dynamic header: 110 for last_blk; 010 for non-last_block
-   __write__( zipfile, HLIT  - 257, 5 ); // HLIT
-   __write__( zipfile, HDIST - 1,   5 ); // HDIST
-   __write__( zipfile, HCLEN - 4,   4 ); // HCLEN
+   zipfile->write( ( ( last_blk ) ? 6 : 2 ), 3 ); // Dynamic header: 110 for last_blk; 010 for non-last_block
+   zipfile->write( HLIT  - 257, 5 ); // HLIT
+   zipfile->write( HDIST - 1,   5 ); // HDIST
+   zipfile->write( HCLEN - 4,   4 ); // HCLEN
 
    for ( zseb_16_t idx = 0; idx < HCLEN; idx++ ){
-      __write__( zipfile, stat_ssq[ idx ], 3 ); // CCL of reshuffled RLE symbols
+      zipfile->write( stat_ssq[ idx ], 3 ); // CCL of reshuffled RLE symbols
    }
 
    for ( zseb_16_t idx = 0; idx < size_ssq; idx++ ){
       const zseb_16_t idx_sym = stat_comb[ idx ];
       const zseb_16_t idx_pos = ssq_sym2pos[ idx_sym ];
-      __write__( zipfile, tree_ssq[ idx_pos ].data, tree_ssq[ idx_pos ].info ); // RLE symbols in CCL codons
+      zipfile->write( tree_ssq[ idx_pos ].data, tree_ssq[ idx_pos ].info ); // RLE symbols in CCL codons
       if ( idx_sym >= 16 ){
-         __write__( zipfile, stat_comb[ idx + 1 ], bit_ssq[ idx_sym ] ); // Shifts
+         zipfile->write( stat_comb[ idx + 1 ], bit_ssq[ idx_sym ] ); // Shifts
          idx++;
       }
    }
@@ -361,35 +280,35 @@ void zseb::huffman::pack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t
    for ( zseb_32_t idx = 0; idx < size; idx++ ){
       if ( dist_pack[ idx ] == ZSEB_MAX_16T ){
          const zseb_16_t lit_code = llen_pack[ idx ];
-         __write__( zipfile, tree_llen[ lit_code ].data, tree_llen[ lit_code ].info ); // Literal
+         zipfile->write( tree_llen[ lit_code ].data, tree_llen[ lit_code ].info ); // Literal
       } else {
          const zseb_16_t len_code = __len_code__( llen_pack[ idx ] );
          const zseb_16_t len_nbit = __len_bits__( len_code );
-         __write__( zipfile, tree_llen[ len_code ].data, tree_llen[ len_code ].info ); // Length codon
+         zipfile->write( tree_llen[ len_code ].data, tree_llen[ len_code ].info ); // Length codon
          if ( len_nbit > 0 ){
             const zseb_16_t len_plus = llen_pack[ idx ] - __len_base__( len_code );
-            __write__( zipfile, len_plus, len_nbit ); // Shifts
+            zipfile->write( len_plus, len_nbit ); // Shifts
          }
          const zseb_16_t dist_code = __dist_code__( dist_pack[ idx ] );
          const zseb_16_t dist_nbit = bit_dist[ dist_code ];
-         __write__( zipfile, tree_dist[ dist_code ].data, tree_dist[ dist_code ].info ); // Dist codon
+         zipfile->write( tree_dist[ dist_code ].data, tree_dist[ dist_code ].info ); // Dist codon
          if ( dist_nbit > 0 ){
             const zseb_16_t dist_plus = dist_pack[ idx ] - add_dist[ dist_code ];
-            __write__( zipfile, dist_plus, dist_nbit ); // Shifts
+            zipfile->write( dist_plus, dist_nbit ); // Shifts
          }
       }
    }
-   __write__( zipfile, tree_llen[ ZSEB_LITLEN ].data, tree_llen[ ZSEB_LITLEN ].info ); // Stop codon
+   zipfile->write( tree_llen[ ZSEB_LITLEN ].data, tree_llen[ ZSEB_LITLEN ].info ); // Stop codon
 
 }
 
-zseb_16_t zseb::huffman::__get_sym__( zseb_stream &zipfile, zseb_node * tree ){
+zseb_16_t zseb::huffman::__get_sym__( stream * zipfile, zseb_node * tree ){
 
    zseb_16_t idx = 0; // start at root
-   zseb_16_t bit;
+   zseb_32_t bit;
 
    while ( tree[ idx ].child[ 0 ] != tree[ idx ].child[ 1 ] ){ // not a leaf
-      bit = __read__( zipfile, 1 ); // read-in bit
+      bit = zipfile->read( 1 ); // read-in bit
       idx = tree[ idx ].child[ bit ]; // goto child
    }
 
@@ -398,9 +317,9 @@ zseb_16_t zseb::huffman::__get_sym__( zseb_stream &zipfile, zseb_node * tree ){
 
 }
 
-void zseb::huffman::__CL_unpack__( zseb_stream &zipfile, zseb_node * tree, const zseb_16_t size, zseb_16_t * stat ){
+void zseb::huffman::__CL_unpack__( stream * zipfile, zseb_node * tree, const zseb_16_t size, zseb_16_t * stat ){
 
-   zseb_16_t bit;
+   zseb_32_t bit;
    zseb_16_t size_part = 0;
    zseb_16_t idx_pos;
    zseb_16_t idx_sym;
@@ -416,7 +335,7 @@ void zseb::huffman::__CL_unpack__( zseb_stream &zipfile, zseb_node * tree, const
 
       if ( idx_sym == 16 ){
          assert( size_part > 0 );
-         bit = 3 + __read__( zipfile, 2 ); // num repeats
+         bit = 3 + zipfile->read( 2 ); // num repeats
          while ( bit > 0 ){
             stat[ size_part ] = stat[ size_part - 1 ];
             size_part += 1;
@@ -425,7 +344,7 @@ void zseb::huffman::__CL_unpack__( zseb_stream &zipfile, zseb_node * tree, const
       }
 
       if ( idx_sym == 17 ){
-         bit = 3 + __read__( zipfile, 3 ); // num repeats
+         bit = 3 + zipfile->read( 3 ); // num repeats
          while ( bit > 0 ){
             stat[ size_part ] = 0;
             size_part += 1;
@@ -434,7 +353,7 @@ void zseb::huffman::__CL_unpack__( zseb_stream &zipfile, zseb_node * tree, const
       }
 
       if ( idx_sym == 18 ){
-         bit = 11 + __read__( zipfile, 7 ); // num repeats
+         bit = 11 + zipfile->read( 7 ); // num repeats
          while ( bit > 0 ){
             stat[ size_part ] = 0;
             size_part += 1;

@@ -25,6 +25,7 @@
 #include <string>
 
 #include "dtypes.h"
+#include "stream.h"
 
 #define ZSEB_HUF_LLEN       286      // 0-255 lit; 256 stop; 257-285 len; 286 and 287 unused
 #define ZSEB_HUF_DIST       30       // 0-29 dist
@@ -55,11 +56,9 @@ namespace zseb{
 
          virtual ~huffman();
 
-         void  pack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size, const bool last_blk );
+         void  pack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size, const bool last_blk );
 
-         int unpack( zseb_stream &zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack );
-
-         static void flush( zseb_stream &zipfile );
+         int unpack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack );
 
       private:
 
@@ -79,10 +78,6 @@ namespace zseb{
 
          /***  HELPER FUNCTIONS  ***/
 
-         static inline void __write__( zseb_stream &zipfile, const zseb_16_t data, const zseb_16_t nbits );
-
-         static inline zseb_16_t __read__( zseb_stream &zipfile, const zseb_16_t nbits );
-
          static inline zseb_16_t __bit_reverse__( zseb_16_t code, const zseb_16_t nbits );
 
          static void __prefix_lengths__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, const zseb_16_t ZSEB_MAX_BITS );
@@ -91,9 +86,9 @@ namespace zseb{
 
          static zseb_16_t __ssq_creation__( zseb_16_t * stat, const zseb_16_t size );
 
-         static void __CL_unpack__( zseb_stream &zipfile, zseb_node * tree, const zseb_16_t size, zseb_16_t * stat );
+         static void __CL_unpack__( stream * zipfile, zseb_node * tree, const zseb_16_t size, zseb_16_t * stat );
 
-         static zseb_16_t __get_sym__( zseb_stream &zipfile, zseb_node * tree );
+         static zseb_16_t __get_sym__( stream * zipfile, zseb_node * tree );
 
          /***  HUFFMAN TREE STATIC CONSTANTS  ***/
 

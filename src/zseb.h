@@ -25,6 +25,7 @@
 #include <string>
 
 #include "dtypes.h"
+#include "stream.h"
 #include "lzss.h"
 #include "huffman.h"
 
@@ -53,7 +54,7 @@ namespace zseb{
 
          huffman * coder;
 
-         zseb_stream zipfile;
+         stream * zipfile;
 
          zseb_08_t * llen_pack; // Length ZSEB_WR_FRAME; contains lit_code OR len_shift ( packing happens later )
 

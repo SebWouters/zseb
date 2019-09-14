@@ -34,17 +34,15 @@ zseb::zseb::zseb( std::string toread, std::string towrite, const char modus ){
 
    flate     = NULL;
    coder     = NULL;
+   zipfile   = NULL;
    llen_pack = NULL;
    dist_pack = NULL;
 
    if ( modus == 'Z' ){
 
-      flate = new lzss( toread, modus );
-      coder = new huffman();
-
-      zipfile.file.open( towrite.c_str(), std::ios::out|std::ios::binary|std::ios::trunc );
-      zipfile.data = 0;
-      zipfile.ibit = 0;
+      flate   = new lzss( toread, modus );
+      coder   = new huffman();
+      zipfile = new stream( towrite, 'W' );
 
       llen_pack  = new zseb_08_t[ ZSEB_PACK_SIZE ];
       dist_pack  = new zseb_16_t[ ZSEB_PACK_SIZE ];
@@ -54,18 +52,13 @@ zseb::zseb::zseb( std::string toread, std::string towrite, const char modus ){
 
    if ( modus == 'U' ){
 
-      flate = new lzss( towrite, modus );
-      coder = new huffman();
-
-      zipfile.file.open( toread.c_str(), std::ios::in|std::ios::binary ); // At begin
-      zipfile.data = 0;
-      zipfile.ibit = 0;
+      flate   = new lzss( towrite, modus );
+      coder   = new huffman();
+      zipfile = new stream( toread, 'R' );
 
       llen_pack  = new zseb_08_t[ ZSEB_UNPACK_SIZE ];
       dist_pack  = new zseb_16_t[ ZSEB_UNPACK_SIZE ];
       wr_current = 0;
-
-      if ( zipfile.file.is_open() == false ){ std::cerr << "zseb::zseb: Unable to open " << toread << "." << std::endl; }
 
    }
 
@@ -73,9 +66,9 @@ zseb::zseb::zseb( std::string toread, std::string towrite, const char modus ){
 
 zseb::zseb::~zseb(){
 
-   if ( zipfile.file.is_open() ){ zipfile.file.close(); }
    if ( flate != NULL ){ delete flate; }
    if ( coder != NULL ){ delete coder; }
+   if ( zipfile != NULL ){ delete zipfile; }
    if ( llen_pack != NULL ){ delete [] llen_pack; }
    if ( dist_pack != NULL ){ delete [] dist_pack; }
 
@@ -85,7 +78,7 @@ void zseb::zseb::zip(){
 
    // TODO: Write GZIP preamble
 
-   zseb_64_t size_zlib = ( zseb_64_t )( zipfile.file.tellg() );
+   zseb_64_t size_zlib = zipfile->getpos();
 
    bool last_block = false;
 
@@ -109,14 +102,15 @@ void zseb::zseb::zip(){
 
    }
 
-   coder->flush( zipfile );
-   size_zlib = ( zseb_64_t )( zipfile.file.tellg() ) - size_zlib; // Bytes
+   zipfile->flush();
+   size_zlib = zipfile->getpos() - size_zlib; // Bytes
 
    // TODO: Write GZIP checksums
 
    const zseb_32_t chcksm = flate->get_checksum();
    std::cout << "CRC32 = " << chcksm << std::endl;
-   zipfile.file.close();
+   delete zipfile; // So that file closes...
+   zipfile = NULL;
 
    const zseb_64_t size_file = flate->get_file_bytes();
    const zseb_64_t size_lzss = flate->get_lzss_bits();

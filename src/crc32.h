@@ -26,6 +26,7 @@
 #define ZSEB_CRC32_BITFLIP  0xFFFFFFFFL
 #define ZSEB_CRC32_TABLE    256
 #define ZSEB_CRC32_MASK     0xFF
+#define ZSEB_CRC32_CHARBIT  8
 
 namespace zseb{
 

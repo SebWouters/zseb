@@ -57,7 +57,7 @@ zseb_32_t zseb::crc32::entry( const zseb_16_t idx ){
 
    zseb_32_t val = idx;
 
-   for ( zseb_16_t k = 0; k < 8; k++ ){
+   for ( zseb_16_t k = 0; k < ZSEB_CRC32_CHARBIT; k++ ){
 
       if ( val & 1 ){
          val = ZSEB_CRC32_REVERSE ^ ( val >> 1 );
@@ -77,7 +77,7 @@ zseb_32_t zseb::crc32::update( const zseb_32_t crc, char * data, const zseb_32_t
 
    for ( zseb_32_t idx_data = 0; idx_data < length; idx_data++ ){
 
-      work = table[ ( work ^ data[ idx_data ] ) & ZSEB_CRC32_MASK ] ^ ( work >> 8 );
+      work = table[ ( work ^ data[ idx_data ] ) & ZSEB_CRC32_MASK ] ^ ( work >> ZSEB_CRC32_CHARBIT );
 
    }
 

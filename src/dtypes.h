@@ -37,17 +37,5 @@
 #define ZSEB_256_16T      ( ( zseb_16_t )( 256 ) )
 #define ZSEB_MAX_16T      65535
 
-namespace zseb{
-
-   typedef struct zseb_stream{
-
-      std::fstream file;
-      zseb_16_t    ibit;
-      zseb_32_t    data;
-
-   } zseb_stream;
-
-}
-
 #endif
 
