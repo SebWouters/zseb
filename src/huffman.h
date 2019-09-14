@@ -27,9 +27,9 @@
 #include "dtypes.h"
 #include "stream.h"
 
-#define ZSEB_HUF_LLEN       286      // 0-255 lit; 256 stop; 257-285 len; 286 and 287 unused
+#define ZSEB_HUF_LLEN       288      // 0-255 lit; 256 stop; 257-285 len; 286 and 287 unused
 #define ZSEB_HUF_DIST       30       // 0-29 dist
-#define ZSEB_HUF_COMBI      316      // ZSEB_HUF_LLEN + ZSEB_HUF_DIST
+#define ZSEB_HUF_COMBI      318      // ZSEB_HUF_LLEN + ZSEB_HUF_DIST
 #define ZSEB_HUF_SSQ        19       // 0-15 prefix length; 16 prev rep; 17 small zero seq; 18 large zero seq
 #define ZSEB_HUF_TREE_LLEN  575      // 2 * ZSEB_HUF_LLEN - 1: WCS each llen_code encountered at least once
 #define ZSEB_HUF_TREE_DIST  59       // 2 * ZSEB_HUF_DIST - 1: WCS each dist_code encountered at least once
@@ -56,9 +56,19 @@ namespace zseb{
 
          virtual ~huffman();
 
-         void  pack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size, const bool last_blk );
+         /***  TREES  ***/
 
-         int unpack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack );
+         void load_tree( stream * zipfile );
+
+         void calc_write_tree( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size );
+
+         void fixed_tree( const char modus );
+
+         /***  (UN)PACK  ***/
+
+         void pack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size );
+
+         zseb_32_t unpack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack );
 
       private:
 

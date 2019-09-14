@@ -101,7 +101,7 @@ Code example:
 Documentation
 -------------
 
-   - Gailly, **Algoritm and GZIP file format**,
+   - Gailly, **Algorithm and GZIP file format**,
      <https://git.savannah.gnu.org/cgit/gzip.git/tree/algorithm.doc>
 
    - Deutsch, **DEFLATE Compressed Data Format Specification**

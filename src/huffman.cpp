@@ -131,18 +131,14 @@ zseb_08_t zseb::huffman::__dist_code__( const zseb_16_t dist_shft ){
 
 }
 
-int zseb::huffman::unpack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack ){
-
-   assert( wr_current == 0 ); // TODO: If not zero: last returned 2, want to continue: switch from purely static class to data --> reuse trees
+void zseb::huffman::load_tree( stream * zipfile ){
 
    for ( zseb_16_t cnt = 0; cnt < ZSEB_HUF_COMBI; cnt++ ){ stat_comb[ cnt ] = 0; }
    for ( zseb_16_t cnt = 0; cnt < ZSEB_HUF_SSQ;   cnt++ ){ stat_ssq [ cnt ] = 0; }
 
-   const zseb_16_t HEAD  = ( zseb_16_t )( zipfile->read( 3 ) );
    const zseb_16_t HLIT  = ( zseb_16_t )( zipfile->read( 5 ) ) + 257;
    const zseb_16_t HDIST = ( zseb_16_t )( zipfile->read( 5 ) ) + 1;
    const zseb_16_t HCLEN = ( zseb_16_t )( zipfile->read( 4 ) ) + 4;
-   assert( ( HEAD == 6 ) || ( HEAD == 2 ) ); // 6 means LAST BLOCK
 
    for ( zseb_16_t idx = 0; idx < HCLEN; idx++ ){
       stat_ssq[ idx ] = ( zseb_16_t )( zipfile->read( 3 ) ); // CCL of reshuffled RLE symbols
@@ -155,57 +151,13 @@ int zseb::huffman::unpack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * 
    __CL_unpack__( zipfile, tree_ssq, HLIT + HDIST, stat_comb );
    zseb_16_t * stat_dist = stat_comb + HLIT;
 
-   // Build tree
+   // Build trees
    __build_tree__( stat_comb, HLIT , tree_llen, work, 'I', ZSEB_MAX_BITS_LLD );
    __build_tree__( stat_dist, HDIST, tree_dist, work, 'I', ZSEB_MAX_BITS_LLD );
 
-   // Ready to read-in!
-   zseb_16_t llen_code = 0;
-
-   while ( ( llen_code != ZSEB_LITLEN ) && ( wr_current < maxsize_pack ) ){
-
-      llen_code = __get_sym__( zipfile, tree_llen );
-
-      if ( llen_code < ZSEB_LITLEN ){ // write literal
-
-         llen_pack[ wr_current ] = llen_code;
-         dist_pack[ wr_current ] = ZSEB_MAX_16T;
-         wr_current += 1;
-
-      }
-
-      if ( llen_code > ZSEB_LITLEN ){ // write ( len, dist ) pair
-
-         zseb_16_t len_shft = __len_base__( llen_code );
-         zseb_16_t len_nbit = __len_bits__( llen_code );
-         if ( len_nbit > 0 ){
-            len_shft = len_shft + ( zseb_16_t )( zipfile->read( len_nbit ) );
-         }
-
-         zseb_16_t dist_code = __get_sym__( zipfile, tree_dist );
-         zseb_16_t dist_shft = add_dist[ dist_code ];
-         zseb_16_t dist_nbit = bit_dist[ dist_code ];
-         if ( dist_nbit > 0 ){
-            dist_shft = dist_shft + ( zseb_16_t )( zipfile->read( dist_nbit ) );
-         }
-
-         llen_pack[ wr_current ] = len_shft;
-         dist_pack[ wr_current ] = dist_shft;
-         wr_current += 1;
-
-      }
-   }
-
-   if ( llen_code != ZSEB_LITLEN ){
-      assert( wr_current == maxsize_pack );
-      return 2; // buffers not large enough
-   }
-
-   return ( ( HEAD == 6 ) ? 1 : 0 );
-
 }
 
-void zseb::huffman::pack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size, const bool last_blk ){
+void zseb::huffman::calc_write_tree( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size ){
 
    zseb_16_t * stat_llen = stat_comb;
    zseb_16_t * stat_dist = stat_llen + ZSEB_HUF_LLEN;
@@ -234,7 +186,7 @@ void zseb::huffman::pack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * d
    zseb_16_t HLIT  = ZSEB_HUF_LLEN; while ( stat_llen[ HLIT  - 1 ] == 0 ){ HLIT  -= 1; } assert( HLIT  >= 257 );
    zseb_16_t HDIST = ZSEB_HUF_DIST; while ( stat_dist[ HDIST - 1 ] == 0 ){ HDIST -= 1; } assert( HDIST >=   1 );
 
-   // Build tree: on output tree[ idx ].( info, data ) = bit ( length, sequence )
+   // Build tree: on output tree[ idx ].( info, data ) = bit ( length, inverse[sequence] )
    __build_tree__( stat_llen, HLIT , tree_llen, work, 'O', ZSEB_MAX_BITS_LLD );
    __build_tree__( stat_dist, HDIST, tree_dist, work, 'O', ZSEB_MAX_BITS_LLD );
 
@@ -255,10 +207,9 @@ void zseb::huffman::pack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * d
    // Retrieve the length of the non-zero CCL
    zseb_16_t HCLEN = ZSEB_HUF_SSQ; while ( stat_ssq[ HCLEN - 1 ] == 0 ){ HCLEN -= 1; } assert( HCLEN >= 4 );
 
-   // Build tree: on output tree[ idx ].( info, data ) = bit ( length, sequence )
+   // Build tree: on output tree[ idx ].( info, data ) = bit ( length, reverse[sequence] )
    __build_tree__( stat_ssq, HCLEN, tree_ssq, work, 'O', ZSEB_MAX_BITS_SSQ );
 
-   zipfile->write( ( ( last_blk ) ? 6 : 2 ), 3 ); // Dynamic header: 110 for last_blk; 010 for non-last_block
    zipfile->write( HLIT  - 257, 5 ); // HLIT
    zipfile->write( HDIST - 1,   5 ); // HDIST
    zipfile->write( HCLEN - 4,   4 ); // HCLEN
@@ -276,6 +227,79 @@ void zseb::huffman::pack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * d
          idx++;
       }
    }
+
+}
+
+void zseb::huffman::fixed_tree( const char modus ){
+
+   assert( ( modus == 'I' ) || ( modus == 'O' ) );
+
+   zseb_16_t * stat_llen = stat_comb;
+   zseb_16_t * stat_dist = stat_llen + ZSEB_HUF_LLEN;
+
+   for ( zseb_16_t cnt = 0;   cnt < 144; cnt++ ){ stat_llen[ cnt ] = 8; } // '8' x 144
+   for ( zseb_16_t cnt = 144; cnt < 256; cnt++ ){ stat_llen[ cnt ] = 9; } // '9' x 112
+   for ( zseb_16_t cnt = 256; cnt < 280; cnt++ ){ stat_llen[ cnt ] = 7; } // '7' x 24
+   for ( zseb_16_t cnt = 280; cnt < 288; cnt++ ){ stat_llen[ cnt ] = 8; } // '8' x 8
+   for ( zseb_16_t cnt = 0;   cnt < 30;  cnt++ ){ stat_dist[ cnt ] = 5; } // All dist CL 5
+
+   // Build trees
+   __build_tree__( stat_llen, ZSEB_HUF_LLEN, tree_llen, work, modus, ZSEB_MAX_BITS_LLD );
+   __build_tree__( stat_dist, ZSEB_HUF_DIST, tree_dist, work, modus, ZSEB_MAX_BITS_LLD );
+
+}
+
+zseb_32_t zseb::huffman::unpack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack ){
+
+   assert( wr_current == 0 );
+
+   // Ready to read-in!
+   zseb_16_t llen_code = 0;
+
+   while ( ( llen_code != ZSEB_LITLEN ) && ( wr_current < maxsize_pack ) ){
+
+      llen_code = __get_sym__( zipfile, tree_llen );
+
+      if ( llen_code < ZSEB_LITLEN ){ // unpack literal
+
+         llen_pack[ wr_current ] = llen_code;
+         dist_pack[ wr_current ] = ZSEB_MAX_16T;
+         wr_current += 1;
+
+      }
+
+      if ( llen_code > ZSEB_LITLEN ){ // unpack ( len, dist ) pair
+
+         zseb_16_t len_shft = __len_base__( llen_code );
+         zseb_16_t len_nbit = __len_bits__( llen_code );
+         if ( len_nbit > 0 ){
+            len_shft = len_shft + ( zseb_16_t )( zipfile->read( len_nbit ) );
+         }
+
+         zseb_16_t dist_code = __get_sym__( zipfile, tree_dist );
+         zseb_16_t dist_shft = add_dist[ dist_code ];
+         zseb_16_t dist_nbit = bit_dist[ dist_code ];
+         if ( dist_nbit > 0 ){
+            dist_shft = dist_shft + ( zseb_16_t )( zipfile->read( dist_nbit ) );
+         }
+
+         llen_pack[ wr_current ] = len_shft;
+         dist_pack[ wr_current ] = dist_shft;
+         wr_current += 1;
+
+      }
+   }
+
+   if ( llen_code != ZSEB_LITLEN ){
+      assert( wr_current == maxsize_pack );
+      return 666; // buffers not large enough
+   }
+
+   return 0;
+
+}
+
+void zseb::huffman::pack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size ){
 
    for ( zseb_32_t idx = 0; idx < size; idx++ ){
       if ( dist_pack[ idx ] == ZSEB_MAX_16T ){

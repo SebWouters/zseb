@@ -92,6 +92,39 @@ void zseb::lzss::flush(){
 
 }
 
+void zseb::lzss::copy( stream * zipfile, const zseb_16_t size_copy ){
+
+   zseb_32_t nwrite = 0;
+   if ( size_copy > ZSEB_HISTORY ){
+      nwrite = rd_current; // Write everything away, there will be still enough history
+   } else { // ( ZSEB_HISTORY - size_copy ) >= 0
+      if ( rd_current > ( ZSEB_HISTORY - size_copy ) ){
+         nwrite = rd_current - ( ZSEB_HISTORY - size_copy );
+         // Hence rd_current + size_copy - nwrite = ZSEB_HISTORY --> exactly ZSEB_HISTORY remains
+      }
+      // If rd_current + size_copy <= ZSEB_HISTORY, no need to write
+   }
+
+   if ( nwrite > 0 ){
+
+      assert( rd_current >= nwrite );
+
+      file.write( frame, nwrite );
+      checksum = crc32::update( checksum, frame, nwrite );
+
+      for ( zseb_32_t cnt = 0; cnt < ( rd_current - nwrite ); cnt++ ){
+         frame[ cnt ] = frame[ nwrite + cnt ];
+      }
+
+      rd_current -= nwrite;
+
+   }
+
+   zipfile->read( frame + rd_current, size_copy );
+   rd_current += size_copy;
+
+}
+
 void zseb::lzss::inflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size_pack ){
 
    for ( zseb_32_t idx = 0; idx < size_pack; idx++ ){
@@ -131,7 +164,7 @@ void zseb::lzss::inflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zs
 
 }
 
-bool zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size_pack, zseb_32_t &wr_current ){
+zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size_pack, zseb_32_t &wr_current ){
 
    zseb_32_t longest_ptr0;
    zseb_16_t longest_len0 = 3; // No reuse of ( ptr1, len1 ) data initially
@@ -183,7 +216,7 @@ bool zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zs
    if ( wr_current >= size_pack ){
 
       assert( wr_current == size_pack );
-      return false; // Not yet last block
+      return 0; // Not yet last block
 
    } else {
 
@@ -203,11 +236,11 @@ bool zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zs
          rd_current += 1;
       }
 
-      return true; // Last block
+      return 1; // Last block
 
    }
 
-   return true; // Last block
+   return 1; // Last block
 
 }
 

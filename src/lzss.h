@@ -46,11 +46,13 @@ namespace zseb{
          virtual ~lzss();
 
          // Following returns "Last block?"; on input wr_current is reset to zero; on output wr_current is #elem in *_pack; max(wr_current) <= size_pack + 4
-         bool deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size_pack, zseb_32_t &wr_current );
+         zseb_32_t deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size_pack, zseb_32_t &wr_current );
 
          void inflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size_pack );
 
          void flush();
+
+         void copy( stream * zipfile, const zseb_16_t size_copy );
 
          zseb_64_t get_lzss_bits() const;
 
