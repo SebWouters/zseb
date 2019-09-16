@@ -32,17 +32,21 @@ TODO
    - Quicken up LZSS deflate (long enough match; unthorough lazy eval)
    - Handle HEAD X00 (no compress) and X01 (predefined symbols)
    - Command line interface
-   - Checksums
    - GZIP header/preamble
    - Handle the return == 2 case for Huffman::unpack
    - Add handle return == 3 (?) for X00 (no compress) for Huffman::unpack
    - Create Stream class to package files?
    - Ability to unzip GZIP-created files
    - Ability to zip to GZIP-processable file
+   - MMC
+   - Wrap around prev3/prev4 hash chains
    - Write documentation
 
-Idea: hash chain hierarchy
+Morphing Match Chain (MMC)
 --------------------------
+
+Update 16 September 2019: This is known as
+Morphing Match Chain (MMC), see below.
 
 ASCII art:
 
@@ -124,4 +128,8 @@ Documentation
      section 9.1.2, pages 235 to 236,
      <https://dl.acm.org/citation.cfm?id=601218>: settles ambiguity
      on lazy evaluation
+
+   - Yann Collet, **MMC - Morphing Match Chain**, RealTime Data
+     Compression, Development blog on compression algorithms,
+     <https://fastcompression.blogspot.com/p/mmc-morphing-match-chain.html>
 

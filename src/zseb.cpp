@@ -120,9 +120,8 @@ void zseb::zseb::zip(){
       temp = temp >> 8;
    }
    zipfile->write( writeout, 4 );
-   // Write ISIZE
-   assert( size_file <= 0xFFFFFFFF );
-   temp = ( zseb_32_t )( size_file );
+   // Write ISIZE = size_file mod 2^32
+   temp = ( zseb_32_t )( size_file & 0xFFFFFFFF );
    for ( zseb_16_t cnt = 0; cnt < 4; cnt++ ){
       writeout[ cnt ] = ( zseb_08_t )( temp & 0xFF );
       temp = temp >> 8;
@@ -228,8 +227,8 @@ void zseb::zseb::unzip(){
    for ( zseb_16_t cnt = 0; cnt < 4; cnt++ ){
       temp = ( temp << 8 ) ^ ( ( zseb_08_t )( readin[ 3 - cnt ] ) );
    }
-   std::cout << "Computed ISIZE = " << size_file << " and read-in ISIZE = " << temp << "." << std::endl;
-   assert( size_file == temp );
+   std::cout << "Computed ISIZE = " << ( size_file & 0xFFFFFFFF ) << " and read-in ISIZE = " << temp << "." << std::endl;
+   assert( ( size_file & 0xFFFFFFFF ) == temp );
 
    std::cout << "zseb: unzip: LZSS  = " << time_lzss << "s." << std::endl;
    std::cout << "             Huff  = " << time_huff << "s." << std::endl;

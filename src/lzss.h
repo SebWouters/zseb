@@ -33,7 +33,7 @@
 
 #define ZSEB_HASH_SIZE    16777216U  // ZSEB_LITLEN^3 = 2^24
 #define ZSEB_HASH_MASK    16777215U  // ZSEB_LITLEN^3 - 1 = 2^24 - 1
-#define ZSEB_HASH_STOP    ( ~( ( zseb_32_t )( 0U ) ) ) // pointers can be larger than 2^16
+#define ZSEB_HASH_STOP    0xFFFFFFFF // pointers can be larger than 2^16
 
 namespace zseb{
 

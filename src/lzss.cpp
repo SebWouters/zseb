@@ -261,6 +261,9 @@ void zseb::lzss::__shift_left__(){
    for ( zseb_32_t cnt = 0; cnt < ( rd_end - ZSEB_SHIFT ); cnt++ ){
       frame[ cnt ] = frame[ cnt + ZSEB_SHIFT ];
    }
+
+   // TODO: Is the following necessary? Can one work with hash_ptrs[ cnt % ZSEB_HISTORY ] = hash_ptrs[ cnt & ( ZSEB_HISTORY - 1 ) ]?
+
    for ( zseb_32_t cnt = 0; cnt < ( rd_end - ZSEB_SHIFT ); cnt++ ){ // cnt < ZSEB_SHIFT
       const zseb_32_t temp = hash_ptrs[ cnt + ZSEB_SHIFT ];
       hash_ptrs[ cnt ] = ( ( ( temp == ZSEB_HASH_STOP ) || ( temp < ZSEB_SHIFT ) ) ? ( ZSEB_HASH_STOP ) : ( temp ^ ZSEB_SHIFT ) ); // temp - ZSEB_SHIFT
