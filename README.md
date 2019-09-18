@@ -20,11 +20,27 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 Information
 -----------
 
-Work in progess.
+A GZIP/DEFLATE compatible implementation (work in progress).
 
-A GZIP/DEFLATE compatible implementation (in progress).
+The algorithm makes use of a minimalistic Morphing Match Chain (MMC).
+In the code, multiple hash chains are used:
 
-Playing around.
+   - **hash_prv3** is a hash chain of 3-character identities; and
+   - **hash_prv4** is a hash chain of 4-character identities.
+
+As in gzip, **hash_prv3** is initially followed. Meanwhile, **hash_prv4** is
+updated correspondigly, until a chain is picked up on **hash_prv4**. From
+then on, **hash_prv4** is followed instead of **hash_prv3** and **hash_prv4** no
+longer needs to be updated. In ASCII art:
+
+    abcd1abce2abcf3abcg4abch5abci6abcj7abck8abcl9abcg0abcd1abce2abcf3abcg4abch5abci6abcj7abck8abcl9abcg0
+                   |                             |                   |    |    |    |    |    |    |
+                   |                             |                   |    |    |    |    |    |    |
+                   |                             |                   <----<----<----<----<----<----|
+                   |                             |                   ptr6 ptr5 ptr4 ptr3 ptr2 ptr1 i    using hash_prv3
+                   |                             |                   |
+    ---------------<-----------------------------<--------------------
+                   ptr8                          ptr7                                                   using hash_prv4
 
 TODO
 ----
@@ -38,69 +54,7 @@ TODO
    - Create Stream class to package files?
    - Ability to unzip GZIP-created files
    - Ability to zip to GZIP-processable file
-   - MMC
-   - Wrap around prev3/prev4 hash chains
    - Write documentation
-
-Morphing Match Chain (MMC)
---------------------------
-
-Update 16 September 2019: This is known as
-Morphing Match Chain (MMC), see below.
-
-ASCII art:
-
-    abcd1abce2abcf3abcg4abch5abci6abcj7abck8abcl9abcg0abcd1abce2abcf3abcg4abch5abci6abcj7abck8abcl9abcg0
-                   |                             |                   |    |    |    |    |    |    |
-                   |                             |                   |    |    |    |    |    |    |
-                   |                             |                   <----<----<----<----<----<----|
-                   |                             |                   ptr6 ptr5 ptr4 ptr3 ptr2 ptr1 i    using prev3
-                   |                             |                   |
-    ---------------<-----------------------------<--------------------
-                   ptr8                          ptr7                                                   using prev4
-
-
-Code example:
-
-    loop i {
-    
-        ptr     = head[ abc ] // ( == ptr1 )
-        max_len = 1
-        max_ptr = STOP
-        spc_ptr = STOP
-    
-        while (( ptr != STOP ) && ( max_len < 258 )){
-    
-            len = (( max_len > 3 ) ? 4 : 3 )
-            match = true
-    
-            while ( match && ( len < 258 ) ){
-                if ( buffer[ ptr + len ] == buffer[ i + len ] ){
-                    len += 1
-                } else {
-                    match = false
-                }
-            }
-            if ( len > max_len ){
-                max_len = len
-                max_ptr = ptr
-            }
-    
-            if (( spc_ptr == STOP ) && ( max_len > 3 )){
-                spc_ptr = ptr // ( == ptr6 )
-            }
-    
-            ptr = (( max_len == 3 ) ? prev3[ ptr ] : prev4[ ptr ] )
-    
-        }
-    
-        // Some output stuff depending on max_len & max_ptr, perhaps lazy matching
-    
-        prev3[ i ] = head[ abc ] // ( == ptr1 )
-        prev4[ i ] = spc_ptr // ( == ptr6, or STOP if not found in relevant history window with prev3 )
-        head[ abc ] = i
-    
-    }
 
 Documentation
 -------------

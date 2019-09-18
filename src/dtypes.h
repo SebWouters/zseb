@@ -25,8 +25,8 @@
 #define zseb_32_t unsigned int       // c++ guarantees 16-bit at least, but often 32-bit in practice (ILP32, LLP64, LP64)
 #define zseb_64_t unsigned long long // c++ guarantees 64-bit at least
 
-#define ZSEB_HISTORY      32768U     // 2^15
-#define ZSEB_HISTORY_BIT  15
+#define ZSEB_HIST_SIZE    32768U     // 2^15
+#define ZSEB_HIST_BIT     15
 #define ZSEB_LITLEN       256U       // 2^8; there is an alphabet of 256 literals / len_shifts
 #define ZSEB_LITLEN_BIT   8
 #define ZSEB_LENGTH_SHIFT 3          // length = ZSEB_LENGTH_SHIFT + len_shift

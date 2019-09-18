@@ -26,14 +26,15 @@
 
 #include "dtypes.h"
 
-     // ZSEB_HISTORY      32768U     // 2^15 ( data format, defined in dtypes )
-#define ZSEB_SHIFT        65536U     // 2^16
-#define ZSEB_TRIGGER      98304U     // ZSEB_SHIFT + ZSEB_HISTORY: if ( rd_current > ZSEB_SHIFT + ZSEB_HISTORY ) --> shift --> rd_current >= 2^15 + 1
-#define ZSEB_FRAME        99328U     // ZSEB_TRIGGER + 2^10: important that 2^10 > max( length ) = 258 !!!
+     // ZSEB_HIST_SIZE    32768U     // 2^15 ( data format, defined in dtypes )
+#define ZSEB_HIST_MASK    ( ZSEB_HIST_SIZE - 1 )
+#define ZSEB_SHIFT        32768U     // 2^15
+#define ZSEB_TRIGGER      65536U     // ZSEB_SHIFT + ZSEB_HISTORY: if ( rd_current >= ZSEB_SHIFT + ZSEB_HISTORY ) --> shift
+#define ZSEB_FRAME        66560U     // ZSEB_TRIGGER + 2^10: important that 2^10 > max( length ) = 258 !!!
 
 #define ZSEB_HASH_SIZE    16777216U  // ZSEB_LITLEN^3 = 2^24
-#define ZSEB_HASH_MASK    16777215U  // ZSEB_LITLEN^3 - 1 = 2^24 - 1
-#define ZSEB_HASH_STOP    0xFFFFFFFF // pointers can be larger than 2^16
+#define ZSEB_HASH_MASK    ( ZSEB_HASH_SIZE - 1 )
+#define ZSEB_HASH_STOP    0
 
 namespace zseb{
 
@@ -54,11 +55,11 @@ namespace zseb{
 
          void copy( stream * zipfile, const zseb_16_t size_copy );
 
-         zseb_64_t get_lzss_bits() const;
+         zseb_64_t get_lzss_bits() const{ return size_lzss; };
 
-         zseb_64_t get_file_bytes() const;
+         zseb_64_t get_file_bytes() const{ return size_file; };
 
-         zseb_32_t get_checksum() const;
+         zseb_32_t get_checksum() const{ return checksum; };
 
       private:
 
@@ -74,27 +75,27 @@ namespace zseb{
 
          char * frame; // Length ZSEB_FRAME; snippet from file --> [ rd_shift : rd_shift + rd_end ]
 
-         zseb_64_t rd_shift;   // Current starting point of readframe
+         zseb_64_t rd_shift;   // Initial position of frame with respect to file
 
-         zseb_32_t rd_end;     // Current validly filled length of readframe [ 0 : ZSEB_READFRAME ]
+         zseb_32_t rd_end;     // Current validly filled length of frame [ 0 : ZSEB_FRAME ]
 
-         zseb_32_t rd_current; // Current position within readframe
+         zseb_32_t rd_current; // Current position within frame; ergo current position within file = rd_shift + rd_current
 
          /***  Hash table  ***/
 
-         zseb_32_t * hash_last; // hash_last['abc'] = hash_last[ c + 256 * ( b + 256 * a ) ] = index latest encounter (w.r.t. frame); STOP = ZSEB_HASH_STOP
+         zseb_64_t * hash_head; // hash_head['abc'] = hash_head[ c + 256 * ( b + 256 * a ) ] = file idx of latest encounter; file idx == 0 == ZSEB_HASH_STOP
 
-         zseb_32_t * hash_ptrs; // hash_ptrs[ index ] = index' = index of encounter before index ( length ZSEB_FRAME )
+         zseb_64_t * hash_prv3; // hash_prv3[ idx ] = idx' = file idx of encounter before idx with same 3 chars ( length ZSEB_HIST_SIZE )
+
+         zseb_64_t * hash_prv4; // hash_prv4[ idx ] = idx' = file idx of encounter before idx with same 4 chars ( length ZSEB_HIST_SIZE )
 
          /***  Functions  ***/
 
          void __readin__();
 
-         void __shift_left__(); // Shift readframe, hash_last and hash_ptrs
+         void __longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len, const zseb_32_t hash_entry, const zseb_32_t curr, const zseb_64_t shft ) const;
 
          inline void __move_hash__( const zseb_32_t hash_entry ); // Add hash_entry & rd_current to hash; increment rd_current
-
-         inline void __longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len, const zseb_32_t hash_entry, const zseb_32_t position ) const;
 
          inline void __append_lit_encode__( zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current );
 
