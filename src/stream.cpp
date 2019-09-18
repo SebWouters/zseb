@@ -94,7 +94,7 @@ void zseb::stream::write( const zseb_32_t flush, const zseb_16_t nbits ){
 
 }
 
-void zseb::stream::write( char * buffer, const zseb_32_t size ){
+void zseb::stream::write( const char * buffer, const zseb_32_t size ){
 
    file.write( buffer, size );
 

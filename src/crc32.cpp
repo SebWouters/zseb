@@ -71,7 +71,7 @@ zseb_32_t zseb::crc32::entry( const zseb_16_t idx ){
 
 }
 
-zseb_32_t zseb::crc32::update( const zseb_32_t crc, char * data, const zseb_32_t length ){
+zseb_32_t zseb::crc32::update( const zseb_32_t crc, const char * data, const zseb_32_t length ){
 
    zseb_32_t work = crc ^ ZSEB_CRC32_BITFLIP;
 

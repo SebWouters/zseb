@@ -48,6 +48,10 @@ namespace zseb{
 
          void unzip();
 
+         void write_preamble( std::string bigfile );
+
+         std::string strip_preamble();
+
       private:
 
          lzss * flate;

@@ -42,7 +42,7 @@ namespace zseb{
 
          void write( const zseb_32_t flush, const zseb_16_t nbits );
 
-         void write( char * buffer, const zseb_32_t size );
+         void write( const char * buffer, const zseb_32_t size );
 
          /***  READ FUNCTION  ***/
 

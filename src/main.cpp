@@ -22,9 +22,11 @@
 int main(){
 
    zseb::zseb zipper( "tests/bible.txt", "dump.zseb", 'Z' );
+   zipper.write_preamble( "tests/bible.txt" );
    zipper.zip();
 
    zseb::zseb unzipper( "dump.zseb", "dump.unzip.txt", 'U' );
+   std::string origname = unzipper.strip_preamble();
    unzipper.unzip();
 
    return 0;

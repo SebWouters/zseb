@@ -34,7 +34,7 @@ namespace zseb{
 
       public:
 
-         static zseb_32_t update( const zseb_32_t crc, char * data, const zseb_32_t length );
+         static zseb_32_t update( const zseb_32_t crc, const char * data, const zseb_32_t length );
 
          static zseb_32_t entry( const zseb_16_t idx );
 

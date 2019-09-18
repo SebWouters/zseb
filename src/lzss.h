@@ -28,8 +28,8 @@
 
      // ZSEB_HIST_SIZE    32768U     // 2^15 ( data format, defined in dtypes )
 #define ZSEB_HIST_MASK    ( ZSEB_HIST_SIZE - 1 )
-#define ZSEB_SHIFT        32768U     // 2^15
-#define ZSEB_TRIGGER      65536U     // ZSEB_SHIFT + ZSEB_HISTORY: if ( rd_current >= ZSEB_SHIFT + ZSEB_HISTORY ) --> shift
+#define ZSEB_SHIFT        32768U     // Must be an integer multiple of ZSEB_HIST_SIZE, so that ( ZSEB_SHIFT & ZSEB_HIST_MASK ) == 0
+#define ZSEB_TRIGGER      65536U     // ZSEB_SHIFT + ZSEB_HISTORY: if ( rd_current >= ZSEB_TRIGGER ) --> shift
 #define ZSEB_FRAME        66560U     // ZSEB_TRIGGER + 2^10: important that 2^10 > max( length ) = 258 !!!
 
 #define ZSEB_HASH_SIZE    16777216U  // ZSEB_LITLEN^3 = 2^24

@@ -45,15 +45,14 @@ longer needs to be updated. In ASCII art:
 TODO
 ----
 
+   - Add Calgary corpus
    - Quicken up LZSS deflate (long enough match; unthorough lazy eval)
-   - Handle HEAD X00 (no compress) and X01 (predefined symbols)
+   - Handle HEAD X00 (no compress) and X01 (predefined symbols) R/W
    - Command line interface
-   - GZIP header/preamble
    - Handle the return == 2 case for Huffman::unpack
-   - Add handle return == 3 (?) for X00 (no compress) for Huffman::unpack
-   - Create Stream class to package files?
-   - Ability to unzip GZIP-created files
-   - Ability to zip to GZIP-processable file
+   - Ability to unzip GZIP-created files: check
+   - Ability to zip to GZIP-processable file: check
+   - Easy test: draw random/cyclic {0,1,2} for block compress and zip & unzip :-) 
    - Write documentation
 
 Documentation
