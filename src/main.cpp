@@ -29,7 +29,6 @@ int main(){
    std::string origname = unzipper.strip_preamble();
    unzipper.unzip();
 
-
    //zseb::zseb unzipper( "dump.unzip.txt.gz", "test.out.txt", 'U' );
    //std::string origname = unzipper.strip_preamble();
    //unzipper.unzip();

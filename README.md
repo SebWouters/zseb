@@ -50,8 +50,6 @@ TODO
    - Handle HEAD X00 (no compress) and X01 (predefined symbols) R/W
    - Command line interface
    - Handle the return == 2 case for Huffman::unpack
-   - Ability to unzip GZIP-created files: check
-   - Ability to zip to GZIP-processable file: check
    - Easy test: draw random/cyclic {0,1,2} for block compress and zip & unzip :-) 
    - Write documentation
 
