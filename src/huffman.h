@@ -116,8 +116,6 @@ namespace zseb{
 
          static const zseb_08_t bit_ssq[ 19 ];
 
-         static const zseb_08_t ssq_sym2pos[ 19 ];
-
          static const zseb_08_t ssq_pos2sym[ 19 ];
 
          /***  CONVERSIONS  ***/

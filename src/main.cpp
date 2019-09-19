@@ -21,13 +21,18 @@
 
 int main(){
 
-   zseb::zseb zipper( "tests/bible.txt", "dump.zseb", 'Z' );
+   zseb::zseb zipper( "tests/bible.txt", "dump.gz", 'Z' );
    zipper.write_preamble( "tests/bible.txt" );
    zipper.zip();
 
-   zseb::zseb unzipper( "dump.zseb", "dump.unzip.txt", 'U' );
+   zseb::zseb unzipper( "dump.gz", "dump.unzip.txt", 'U' );
    std::string origname = unzipper.strip_preamble();
    unzipper.unzip();
+
+
+   //zseb::zseb unzipper( "dump.unzip.txt.gz", "test.out.txt", 'U' );
+   //std::string origname = unzipper.strip_preamble();
+   //unzipper.unzip();
 
    return 0;
 

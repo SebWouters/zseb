@@ -81,8 +81,6 @@ const zseb_08_t zseb::huffman::map_dist[ 512 ] = {  0,   1,   2,   3,   4,   4, 
 
 const zseb_08_t zseb::huffman::bit_ssq[ 19 ]     = {  0,  0,  0,  0,  0, 0, 0, 0,  0, 0,  0,  0,  0,  0,  0,  0,  2, 3,  7 };
 
-const zseb_08_t zseb::huffman::ssq_sym2pos[ 19 ] = {  3, 17, 15, 13, 11, 9, 7, 5,  4, 6,  8, 10, 12, 14, 16, 18,  0, 1,  2 }; // sym = '0' at pos = 3
-
 const zseb_08_t zseb::huffman::ssq_pos2sym[ 19 ] = { 16, 17, 18,  0,  8, 7, 9, 6, 10, 5, 11,  4, 12,  3, 13,  2, 14, 1, 15 }; // at pos = 0, sym = '16' (rep previous)
 
 zseb::huffman::huffman(){
@@ -140,12 +138,12 @@ void zseb::huffman::load_tree( stream * zipfile ){
    const zseb_16_t HDIST = ( zseb_16_t )( zipfile->read( 5 ) ) + 1;
    const zseb_16_t HCLEN = ( zseb_16_t )( zipfile->read( 4 ) ) + 4;
 
-   for ( zseb_16_t idx = 0; idx < HCLEN; idx++ ){
-      stat_ssq[ idx ] = ( zseb_16_t )( zipfile->read( 3 ) ); // CCL of reshuffled RLE symbols
+   for ( zseb_16_t idx_pos = 0; idx_pos < HCLEN; idx_pos++ ){
+      stat_ssq[ ssq_pos2sym[ idx_pos ] ] = ( zseb_16_t )( zipfile->read( 3 ) ); // CCL of RLE symbols; stat_ssq in idx_sym
    }
 
-   // Build tree: on output tree[ idx ].( info, data ) = bit ( length, sequence ) of SSQ
-   __build_tree__( stat_ssq, HCLEN, tree_ssq, work, 'I', ZSEB_MAX_BITS_SSQ );
+   // Build tree: on output tree[ idx ].( info, data ) = bit ( length, sequence ) of SSQ; tree_ssq in idx_sym
+   __build_tree__( stat_ssq, ZSEB_HUF_SSQ, tree_ssq, work, 'I', ZSEB_MAX_BITS_SSQ );
 
    // Quote from RFC 1951: all CL form a single sequence of HLIT + HDIST + 258 values
    __CL_unpack__( zipfile, tree_ssq, HLIT + HDIST, stat_comb );
@@ -198,30 +196,29 @@ void zseb::huffman::calc_write_tree( stream * zipfile, zseb_08_t * llen_pack, zs
    // Create the RLE for the CL
    const zseb_16_t size_ssq = __ssq_creation__( stat_comb, HLIT + HDIST );
 
-   // Gather statistics on RLE: If sym >= 16, a number to be represented in bit sequence follows
-   for ( zseb_16_t count = 0; count < size_ssq; count++ ){ stat_ssq[ ssq_sym2pos[ stat_comb[ count ] ] ] += 1; if ( stat_comb[ count ] >= 16 ){ count++; } }
+   // Gather statistics on RLE: If sym >= 16, a number to be represented in bit sequence follows; stat_ssq frequencies in idx_sym
+   for ( zseb_16_t count = 0; count < size_ssq; count++ ){ stat_ssq[ stat_comb[ count ] ] += 1; if ( stat_comb[ count ] >= 16 ){ count++; } }
 
-   // Huffman CCL: input(stat) = freq; output(stat) = CCL
+   // Huffman CCL: input(stat) = freq; output(stat) = CCL; stat_ssq in idx_sym
    __prefix_lengths__( stat_ssq, ZSEB_HUF_SSQ, tree_ssq, ZSEB_MAX_BITS_SSQ ); // Header info size depends on ( HLIT, HDIST, HCLEN )
 
-   // Retrieve the length of the non-zero CCL
-   zseb_16_t HCLEN = ZSEB_HUF_SSQ; while ( stat_ssq[ HCLEN - 1 ] == 0 ){ HCLEN -= 1; } assert( HCLEN >= 4 );
+   // Retrieve the length of the non-zero CCL; stat_ssq in idx_sym and HCLEN in idx_pos
+   zseb_16_t HCLEN = ZSEB_HUF_SSQ; while ( stat_ssq[ ssq_pos2sym[ HCLEN - 1 ] ] == 0 ){ HCLEN -= 1; } assert( HCLEN >= 4 );
 
-   // Build tree: on output tree[ idx ].( info, data ) = bit ( length, reverse[sequence] )
-   __build_tree__( stat_ssq, HCLEN, tree_ssq, work, 'O', ZSEB_MAX_BITS_SSQ );
+   // Build tree: on output tree[ idx ].( info, data ) = bit ( length, reverse[sequence] ); tree_ssq in idx_sym
+   __build_tree__( stat_ssq, ZSEB_HUF_SSQ, tree_ssq, work, 'O', ZSEB_MAX_BITS_SSQ );
 
    zipfile->write( HLIT  - 257, 5 ); // HLIT
    zipfile->write( HDIST - 1,   5 ); // HDIST
    zipfile->write( HCLEN - 4,   4 ); // HCLEN
 
-   for ( zseb_16_t idx = 0; idx < HCLEN; idx++ ){
-      zipfile->write( stat_ssq[ idx ], 3 ); // CCL of reshuffled RLE symbols
+   for ( zseb_16_t idx_pos = 0; idx_pos < HCLEN; idx_pos++ ){
+      zipfile->write( stat_ssq[ ssq_pos2sym[ idx_pos ] ], 3 ); // CCL of RLE in idx_pos
    }
 
    for ( zseb_16_t idx = 0; idx < size_ssq; idx++ ){
       const zseb_16_t idx_sym = stat_comb[ idx ];
-      const zseb_16_t idx_pos = ssq_sym2pos[ idx_sym ];
-      zipfile->write( tree_ssq[ idx_pos ].data, tree_ssq[ idx_pos ].info ); // RLE symbols in CCL codons
+      zipfile->write( tree_ssq[ idx_sym ].data, tree_ssq[ idx_sym ].info ); // RLE symbols in CCL codons; tree_ssq in idx_sym
       if ( idx_sym >= 16 ){
          zipfile->write( stat_comb[ idx + 1 ], bit_ssq[ idx_sym ] ); // Shifts
          idx++;
@@ -345,12 +342,10 @@ void zseb::huffman::__CL_unpack__( stream * zipfile, zseb_node * tree, const zse
 
    zseb_32_t bit;
    zseb_16_t size_part = 0;
-   zseb_16_t idx_pos;
    zseb_16_t idx_sym;
 
    while ( size_part < size ){
-      idx_pos = __get_sym__( zipfile, tree );
-      idx_sym = ssq_pos2sym[ idx_pos ];
+      idx_sym = __get_sym__( zipfile, tree );
 
       if ( idx_sym < 16 ){
          stat[ size_part ] = idx_sym;
