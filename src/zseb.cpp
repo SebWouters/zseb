@@ -59,8 +59,8 @@ zseb::zseb::zseb( std::string toread, std::string towrite, const char modus ){
       coder   = new huffman();
       zipfile = new stream( toread, 'R' );
 
-      llen_pack  = new zseb_08_t[ ZSEB_UNPACK_SIZE ];
-      dist_pack  = new zseb_16_t[ ZSEB_UNPACK_SIZE ];
+      llen_pack  = new zseb_08_t[ ZSEB_PACK_SIZE ];
+      dist_pack  = new zseb_16_t[ ZSEB_PACK_SIZE ];
       wr_current = 0;
 
    }
@@ -215,7 +215,7 @@ void zseb::zseb::zip(){
    while ( last_block == 0 ){
 
       gettimeofday( &start, NULL );
-      last_block = flate->deflate( llen_pack, dist_pack, ZSEB_PACK_TRIGGER, wr_current );
+      last_block = flate->deflate( llen_pack, dist_pack, ZSEB_PACK_SIZE, wr_current );
       gettimeofday( &end, NULL );
       time_lzss += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 
@@ -304,7 +304,7 @@ void zseb::zseb::unzip(){
          while ( remain > 0 ){
 
             gettimeofday( &start, NULL );
-            remain = coder->unpack( zipfile, llen_pack, dist_pack, wr_current, ZSEB_UNPACK_SIZE );
+            remain = coder->unpack( zipfile, llen_pack, dist_pack, wr_current, ZSEB_PACK_SIZE );
             gettimeofday( &end, NULL );
             time_huff += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 

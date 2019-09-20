@@ -29,10 +29,7 @@
 #include "lzss.h"
 #include "huffman.h"
 
-#define ZSEB_PACK_SIZE      16392U     // 2^15 + 2^3:  important that 2^3  >= 4 and that ZSEB_PACK_TRIGGER < 2^16 !
-#define ZSEB_PACK_TRIGGER   16384U     // 2^14
-
-#define ZSEB_UNPACK_SIZE    65536U     // 2^16: play it a little bit safer :-)
+#define ZSEB_PACK_SIZE      32776U     // ZSEB_HIST_SIZE + 2^3:  important that 2^3  >= 4!
 
 namespace zseb{
 

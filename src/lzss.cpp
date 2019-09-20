@@ -28,6 +28,9 @@ zseb::lzss::lzss( std::string fullfile, const char modus ){
    size_lzss = 0;
    size_file = 0;
    checksum  = 0;
+   rd_shift  = 0;
+   rd_end    = 0;
+   rd_current = 0;
    frame     = NULL;
    hash_head = NULL;
    hash_prv3 = NULL;
@@ -43,9 +46,6 @@ zseb::lzss::lzss( std::string fullfile, const char modus ){
          file.seekg( 0, std::ios::beg );
 
          frame = new char[ ZSEB_FRAME ];
-         rd_shift = 0;
-         rd_end = 0;
-         rd_current = 0;
 
          hash_head = new zseb_64_t[ ZSEB_HASH_SIZE ];
          hash_prv3 = new zseb_64_t[ ZSEB_HIST_SIZE ];
@@ -68,9 +68,6 @@ zseb::lzss::lzss( std::string fullfile, const char modus ){
       file.open( fullfile.c_str(), std::ios::out|std::ios::binary|std::ios::trunc );
 
       frame = new char[ ZSEB_FRAME ];
-      rd_shift = 0;
-      rd_end = 0;
-      rd_current = 0;
 
    }
 
@@ -169,6 +166,19 @@ void zseb::lzss::inflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zs
 
 zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size_pack, zseb_32_t &wr_current ){
 
+   if ( ( rd_end == ZSEB_FRAME ) && ( rd_current >= ZSEB_TRIGGER ) ){
+
+      for ( zseb_32_t cnt = 0; cnt < ( rd_end - ZSEB_SHIFT ); cnt++ ){
+         frame[ cnt ] = frame[ cnt + ZSEB_SHIFT ];
+      }
+      rd_shift   += ZSEB_SHIFT;
+      rd_end     -= ZSEB_SHIFT;
+      rd_current -= ZSEB_SHIFT;
+
+      __readin__();
+
+   }
+
    zseb_64_t longest_ptr0;
    zseb_16_t longest_len0 = 3; // No reuse of ( ptr1, len1 ) data initially
    zseb_64_t longest_ptr1;
@@ -184,7 +194,12 @@ zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
 
    wr_current = 0;
 
-   while ( ( rd_current < rd_end - 3 ) && ( wr_current < size_pack ) ){
+   // Obtain an upper_limit for rd_current, so that the current processed block does not exceed 32K
+   const zseb_32_t limit1 = ( ( ( rd_shift + rd_current ) == 0 ) ? ZSEB_HIST_SIZE : ZSEB_TRIGGER );
+   const zseb_32_t limit2 = rd_end - 3;
+   const zseb_32_t upper_limit = ( ( limit2 < limit1 ) ? limit2 : limit1 );
+
+   while ( rd_current < upper_limit ){
 
       next_entry = ( ( zseb_08_t )( frame[ rd_current + 3 ] ) ) | ( ( hash_entry << ZSEB_LITLEN_BIT ) & ZSEB_HASH_MASK );
       if ( longest_len0 == 1 ){
@@ -212,24 +227,11 @@ zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
          hash_entry = ( ( zseb_08_t )( frame[ rd_current + 2 ] ) ) | ( ( hash_entry << ZSEB_LITLEN_BIT ) & ZSEB_HASH_MASK );
       }
 
-      if ( ( rd_end == ZSEB_FRAME ) && ( rd_current >= ZSEB_TRIGGER ) ){
-
-         for ( zseb_32_t cnt = 0; cnt < ( rd_end - ZSEB_SHIFT ); cnt++ ){
-            frame[ cnt ] = frame[ cnt + ZSEB_SHIFT ];
-         }
-         rd_shift   += ZSEB_SHIFT;
-         rd_end     -= ZSEB_SHIFT;
-         rd_current -= ZSEB_SHIFT;
-
-         __readin__();
-
-      }
-
    }
 
-   if ( wr_current >= size_pack ){
+   if ( upper_limit != limit2 ){ // rd_end further down the road
 
-      assert( wr_current == size_pack );
+      assert( wr_current <= size_pack );
       return 0; // Not yet last block
 
    } else {
@@ -254,6 +256,7 @@ zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
          rd_current += 1;
       }
 
+      assert( wr_current <= size_pack );
       return 1; // Last block
 
    }
