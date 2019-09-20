@@ -61,7 +61,12 @@ zseb::stream::~stream(){
 
 }
 
-zseb_64_t zseb::stream::getsize() const{ return size; }
+zseb_64_t zseb::stream::getsize() const{
+
+   assert( mode == 'R' );
+   return size;
+
+}
 
 zseb_64_t zseb::stream::getpos(){
 
@@ -86,7 +91,7 @@ void zseb::stream::write( const zseb_32_t flush, const zseb_16_t nbits ){
    ibit = ibit + nbits;
 
    while ( ibit >= 8 ){
-      const char towrite = ( zseb_08_t )( data & 0xFF ); // Mask last 8 bits
+      const char towrite = ( zseb_08_t )( data & 0xFFU ); // Mask last 8 bits
       file.write( &towrite, 1 );
       data = ( data >> 8 );
       ibit = ibit - 8;
@@ -94,16 +99,18 @@ void zseb::stream::write( const zseb_32_t flush, const zseb_16_t nbits ){
 
 }
 
-void zseb::stream::write( const char * buffer, const zseb_32_t size ){
+void zseb::stream::write( const char * buffer, const zseb_32_t size_out ){
 
-   file.write( buffer, size );
+   assert( ibit == 0 );
+
+   file.write( buffer, size_out );
 
 }
 
 void zseb::stream::flush(){
 
    while ( ibit > 0 ){
-      const char towrite = ( zseb_08_t )( data & 0xFF ); // Mask last 8 bits
+      const char towrite = ( zseb_08_t )( data & 0xFFU ); // Mask last 8 bits
       file.write( &towrite, 1 );
       data  = ( data >> 8 );
       ibit  = ( ( ibit > 8 ) ? ( ibit - 8 ) : 0 );
@@ -145,9 +152,31 @@ void zseb::stream::nextbyte(){
 
 }
 
-void zseb::stream::read( char * buffer, const zseb_32_t size ){
+void zseb::stream::read( char * buffer, const zseb_32_t size_in ){
 
-   file.read( buffer, size );
+   assert( ibit == 0 );
+
+   file.read( buffer, size_in );
+
+}
+
+zseb_32_t zseb::stream::str2int( const char * store, const zseb_16_t num ){
+
+   zseb_32_t value = 0;
+   for ( zseb_16_t cnt = 0; cnt < num; cnt++ ){
+      value = ( value << 8 ) ^ ( ( zseb_08_t )( store[ num - 1 - cnt ] ) );
+   }
+   return value;
+
+}
+
+void zseb::stream::int2str( const zseb_32_t value, char * store, const zseb_16_t num ){
+
+   zseb_32_t temp = value;
+   for ( zseb_16_t cnt = 0; cnt < num; cnt++ ){
+      store[ cnt ] = ( zseb_08_t )( temp & 0xFFU );
+      temp = temp >> 8;
+   }
 
 }
 

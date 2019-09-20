@@ -79,33 +79,30 @@ zseb::zseb::~zseb(){
 
 void zseb::zseb::write_preamble( std::string bigfile ){
 
-   /***  Fetch last modification time --> "time", 4 char  ***/
+   /***  Variables  ***/
+   zseb_32_t crc16 = 0;
+   char var;
+   char temp[ 4 ];
+
+   /***  Fetch last modification time  ***/
    struct stat info;
    const zseb_32_t result = stat( bigfile.c_str(), &info );
    assert( result == 0 );
    const zseb_32_t MTIME = ( zseb_32_t )( info.st_mtime );
    std::cout << "MTIME = " << MTIME << std::endl;
-   char time[ 4 ];
-   zseb_32_t temp = MTIME;
-   for ( zseb_16_t cnt = 0; cnt < 4; cnt++ ){
-      time[ cnt ] = ( zseb_08_t )( temp & 0xFF );
-      temp = temp >> 8;
-   }
-
-   /***  CRC of header  ***/
-   zseb_32_t crc16 = 0;
+   stream::int2str( MTIME, temp, 4 );
 
    /***  GZIP header  ***/
-   char ID1 = ( zseb_08_t )( 0x1F ); zipfile->write( &ID1, 1 ); crc16 = crc32::update( crc16, &ID1, 1 );
-   char ID2 = ( zseb_08_t )( 0x8B ); zipfile->write( &ID2, 1 ); crc16 = crc32::update( crc16, &ID2, 1 );
-   char  CM = ( zseb_08_t )( 8 );    zipfile->write(  &CM, 1 ); crc16 = crc32::update( crc16,  &CM, 1 );
-   char FLG = ( zseb_08_t )( 10 );   zipfile->write( &FLG, 1 ); crc16 = crc32::update( crc16, &FLG, 1 ); // (0, 0, 0, FCOMMENT=0, FNAME=1, FEXTRA=0, FHCRC=1, FTEXT=0 )
-                                     zipfile->write( time, 4 ); crc16 = crc32::update( crc16, time, 4 );
-   char XFL = ( zseb_08_t )( 2 );    zipfile->write( &XFL, 1 ); crc16 = crc32::update( crc16, &XFL, 1 ); // Compressor used maximum compression, slowest algorithm
-   char  OS = ( zseb_08_t )( 255 );  zipfile->write(  &OS, 1 ); crc16 = crc32::update( crc16,  &OS, 1 ); // Unknown Operating System
+   /* ID1 */ var = ( zseb_08_t )( 0x1F ); zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
+   /* ID2 */ var = ( zseb_08_t )( 0x8B ); zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
+   /* CM  */ var = ( zseb_08_t )( 8 );    zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
+   /* FLG */ var = ( zseb_08_t )( 10 );   zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); // (0, 0, 0, FCOMMENT=0, FNAME=1, FEXTRA=0, FHCRC=1, FTEXT=0 )
+   /* MTIME */                            zipfile->write( temp, 4 ); crc16 = crc32::update( crc16, temp, 4 );
+   /* XFL */ var = ( zseb_08_t )( 0 );    zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
+   /* OS  */ var = ( zseb_08_t )( 255 );  zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); // Unknown Operating System
 
-   // Stuff if FLG.FEXTRA is set --> no
-   // Stuff if FLG.FNAME  is set --> yes
+   // FLG.FEXTRA --> no
+   // FLG.FNAME  --> yes
 
    /***  Original filename, terminated by a zero byte block  ***/
    std::size_t prev = 0;
@@ -124,94 +121,83 @@ void zseb::zseb::write_preamble( std::string bigfile ){
       std::cout << buffer[ cnt ];
    }
    std::cout << "]" << std::endl;
-   char ZER = ( zseb_08_t )( 0 );
-   zipfile->write( &ZER, 1 );
-   crc16 = crc32::update( crc16, &ZER, 1 );
+   /* ZER */ var = ( zseb_08_t )( 0 );    zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
 
-   // Stuff if FLG.FCOMMENT is set --> no
-   // Stuff if FLG.FHCRC    is set --> yes
+   // FLG.FCOMMENT --> no
+   // FLG.FHCRC    --> yes
 
    /***  Two least significant bytes of all bytes preceding the CRC16  ***/
-   char crc[ 2 ];
-   crc[ 0 ] = ( zseb_08_t )( ( crc16      ) & 0xFF );
-   crc[ 1 ] = ( zseb_08_t )( ( crc16 >> 8 ) & 0xFF );
-   zipfile->write( crc, 2 );
+   stream::int2str( crc16, temp, 2 );
+   zipfile->write( temp, 2 );
 
 }
 
 std::string zseb::zseb::strip_preamble(){
 
-   /***  CRC of header  ***/
+   /***  Variables  ***/
    zseb_32_t crc16 = 0;
+   char var;
+   char temp[ 4 ];
 
    /***  GZIP header  ***/
-   char ID1; zipfile->read( &ID1, 1 ); crc16 = crc32::update( crc16, &ID1, 1 ); assert( ( zseb_08_t )( ID1 ) == 0x1F );
-   char ID2; zipfile->read( &ID2, 1 ); crc16 = crc32::update( crc16, &ID2, 1 ); assert( ( zseb_08_t )( ID2 ) == 0x8B );
-   char  CM; zipfile->read(  &CM, 1 ); crc16 = crc32::update( crc16,  &CM, 1 ); assert( ( zseb_08_t )(  CM ) == 8    );
-   char FLG; zipfile->read( &FLG, 1 ); crc16 = crc32::update( crc16, &FLG, 1 );
-   zseb_08_t tmp = ( zseb_08_t )( FLG );
-   assert( ( tmp & ( 1U << 7 ) ) == 0 );
-   assert( ( tmp & ( 1U << 6 ) ) == 0 );
-   assert( ( tmp & ( 1U << 5 ) ) == 0 );
-   const bool FCOMMENT = ( ( ( tmp >> 4 ) & 1U ) == 1U );
-   const bool FNAME    = ( ( ( tmp >> 3 ) & 1U ) == 1U );
-   const bool FEXTRA   = ( ( ( tmp >> 2 ) & 1U ) == 1U );
-   const bool FHCRC    = ( ( ( tmp >> 1 ) & 1U ) == 1U );
-   const bool FTEXT    = ( ( ( tmp >> 0 ) & 1U ) == 1U );
-   char time[ 4 ]; zipfile->read( time, 4 ); crc16 = crc32::update( crc16, time, 4 );
-   char XFL;       zipfile->read( &XFL, 1 ); crc16 = crc32::update( crc16, &XFL, 1 );
-   char  OS;       zipfile->read(  &OS, 1 ); crc16 = crc32::update( crc16,  &OS, 1 );
+   /* ID1 */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); if ( ( zseb_08_t )( var ) != 0x1F ){ std::cerr << "Incompatible ID1." << std::endl; exit( 255 ); }
+   /* ID2 */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); if ( ( zseb_08_t )( var ) != 0x8B ){ std::cerr << "Incompatible ID2." << std::endl; exit( 255 ); }
+   /* CM  */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); if ( ( zseb_08_t )( var ) != 8    ){ std::cerr << "Incompatible CM."  << std::endl; exit( 255 ); }
+   /* FLG */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); const zseb_08_t FLG = ( zseb_08_t )( var );
+   if ( ( ( FLG >> 7 ) & 1U ) == 1U ){ std::cerr << "Reserved bit is non-zero." << std::endl; exit( 255 ); }
+   if ( ( ( FLG >> 6 ) & 1U ) == 1U ){ std::cerr << "Reserved bit is non-zero." << std::endl; exit( 255 ); }
+   if ( ( ( FLG >> 5 ) & 1U ) == 1U ){ std::cerr << "Reserved bit is non-zero." << std::endl; exit( 255 ); }
+   const bool FCOMMENT = ( ( ( FLG >> 4 ) & 1U ) == 1U );
+   const bool FNAME    = ( ( ( FLG >> 3 ) & 1U ) == 1U );
+   const bool FEXTRA   = ( ( ( FLG >> 2 ) & 1U ) == 1U );
+   const bool FHCRC    = ( ( ( FLG >> 1 ) & 1U ) == 1U );
+   const bool FTEXT    = ( (   FLG        & 1U ) == 1U );
+   /* MTIME */ zipfile->read( temp, 4 ); crc16 = crc32::update( crc16, temp, 4 ); const zseb_32_t MTIME = stream::str2int( temp, 4 );
+   /* XFL   */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
+   /* OS    */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
 
    /***  Print MTIME  ***/
-   zseb_32_t MTIME = 0;
-   for ( zseb_16_t cnt = 0; cnt < 4; cnt++ ){
-      MTIME = ( MTIME << 8 ) ^ ( ( zseb_08_t )( time[ 3 - cnt ] ) );
-   }
    std::cout << "MTIME = " << MTIME << std::endl;
 
    if ( FEXTRA ){
-      char input[ 2 ];
-      zipfile->read( input, 2 );
-      crc16 = crc32::update( crc16, input, 2 );
-      zseb_16_t size = ( zseb_08_t )( input[ 1 ] );
-      size = ( size << 8 ) ^ ( ( zseb_08_t )( input[ 0 ] ) );
-      char * buffer = new char[ size ];
-      zipfile->read( buffer, size );
-      crc16 = crc32::update( crc16, buffer, size );
-      delete [] buffer;
+      zipfile->read( temp, 2 );
+      crc16 = crc32::update( crc16, temp, 2 );
+      const zseb_16_t XLEN = ( zseb_16_t )( stream::str2int( temp, 2 ) );
+      for ( zseb_16_t cnt = 0; cnt < XLEN; cnt++ ){
+         zipfile->read( &var, 1 );
+         crc16 = crc32::update( crc16, &var, 1 );
+      }
    }
 
    std::string filename = "";
    if ( FNAME ){
-      char input;
       bool proceed = true;
       while ( proceed ){
-         zipfile->read( &input, 1 );
-         crc16 = crc32::update( crc16, &input, 1 );
-         proceed = ( ( zseb_08_t )( input ) != 0 );
-         if ( proceed ){ filename += input; }
+         zipfile->read( &var, 1 );
+         crc16 = crc32::update( crc16, &var, 1 );
+         proceed = ( ( zseb_08_t )( var ) != 0 );
+         if ( proceed ){ filename += var; }
       }
-      std::cout << "Original filename = " << filename << std::endl;
+      std::cout << "FNAME = [" << filename << "]" << std::endl;
    }
 
    if ( FCOMMENT ){
-      char input;
       bool proceed = true;
       while ( proceed ){
-         zipfile->read( &input, 1 );
-         crc16 = crc32::update( crc16, &input, 1 );
-         proceed = ( ( zseb_08_t )( input ) != 0 );
+         zipfile->read( &var, 1 );
+         crc16 = crc32::update( crc16, &var, 1 );
+         proceed = ( ( zseb_08_t )( var ) != 0 );
       }
    }
 
    if ( FHCRC ){
-      char crc[ 2 ];
-      zipfile->read( crc, 2 );
-      zseb_16_t checksum = ( zseb_08_t )( crc[ 1 ] );
-                checksum = ( checksum << 8 ) ^ ( ( zseb_08_t )( crc[ 0 ] ) );
-      crc16 = crc16 & 0xFFFF;
-      std::cout << "Computed CRC16 = " << crc16 << " and read-in CRC16 = " << checksum << "." << std::endl;
-      assert( checksum == crc16 );
+      zipfile->read( temp, 2 );
+      const zseb_32_t checksum = stream::str2int( temp, 2 );
+      crc16 = crc16 & 0xFFFFU;
+      if ( checksum != crc16 ){
+         std::cerr << "Computed CRC16 = " << crc16 << " and read-in CRC16 = " << checksum << "." << std::endl;
+         exit( 255 );
+      }
    }
 
 }
@@ -252,21 +238,14 @@ void zseb::zseb::zip(){
    const zseb_64_t size_file = flate->get_file_bytes();
    const zseb_64_t size_lzss = flate->get_lzss_bits();
 
-   char writeout[ 4 ];
+   char temp[ 4 ];
    // Write CRC32
-   zseb_32_t temp = chcksm;
-   for ( zseb_16_t cnt = 0; cnt < 4; cnt++ ){
-      writeout[ cnt ] = ( zseb_08_t )( temp & 0xFF );
-      temp = temp >> 8;
-   }
-   zipfile->write( writeout, 4 );
+   stream::int2str( chcksm, temp, 4 );
+   zipfile->write( temp, 4 );
    // Write ISIZE = size_file mod 2^32
-   temp = ( zseb_32_t )( size_file & 0xFFFFFFFF );
-   for ( zseb_16_t cnt = 0; cnt < 4; cnt++ ){
-      writeout[ cnt ] = ( zseb_08_t )( temp & 0xFF );
-      temp = temp >> 8;
-   }
-   zipfile->write( writeout, 4 );
+   const zseb_32_t ISIZE = ( zseb_32_t )( size_file & 0xFFFFFFFFU );
+   stream::int2str( ISIZE, temp, 4 );
+   zipfile->write( temp, 4 );
 
    delete zipfile; // So that file closes...
    zipfile = NULL;
@@ -301,13 +280,12 @@ void zseb::zseb::unzip(){
       if ( block_form == 0 ){
 
          zipfile->nextbyte();
-         char size_blk[ 4 ];
-         zipfile->read( size_blk, 4 );
-         zseb_16_t LEN = ( zseb_08_t )( size_blk[ 0 ] );
-         LEN = ( LEN << 8 ) ^ ( ( zseb_08_t )( size_blk[ 1 ] ) );
-         zseb_16_t NLEN = ( zseb_08_t )( size_blk[ 2 ] );
-         NLEN = ( NLEN << 8 ) ^ ( ( zseb_08_t )( size_blk[ 3 ] ) );
-         assert( LEN == ( ~ ( NLEN ) ) );
+         char vals[ 2 ];
+         zipfile->read( vals, 2 ); const zseb_16_t  LEN = ( zseb_16_t )( stream::str2int( vals, 2 ) );
+         zipfile->read( vals, 2 ); const zseb_16_t NLEN = ( zseb_16_t )( stream::str2int( vals, 2 ) );
+         if ( LEN != ( ~NLEN ) ){
+            std::cerr << "Block type X00: LEN != ( ~NLEN )" << std::endl;
+         }
          flate->copy( zipfile, LEN );
 
       } else {
@@ -330,12 +308,12 @@ void zseb::zseb::unzip(){
             gettimeofday( &end, NULL );
             time_huff += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 
-            gettimeofday( &start, NULL );
             if ( wr_current > 0 ){
+               gettimeofday( &start, NULL );
                flate->inflate( llen_pack, dist_pack, wr_current );
+               gettimeofday( &end, NULL );
+               time_lzss += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
             }
-            gettimeofday( &end, NULL );
-            time_lzss += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 
             wr_current = 0;
 
@@ -344,29 +322,27 @@ void zseb::zseb::unzip(){
    }
 
    flate->flush();
+   zipfile->nextbyte();
 
    const zseb_32_t chcksm    = flate->get_checksum();
    const zseb_64_t size_file = flate->get_file_bytes(); // Set on flush
 
-   char readin[ 4 ];
-
+   char temp[ 4 ];
    // Read CRC32
-   zipfile->read( readin, 4 );
-   zseb_32_t temp = 0;
-   for ( zseb_16_t cnt = 0; cnt < 4; cnt++ ){
-      temp = ( temp << 8 ) ^ ( ( zseb_08_t )( readin[ 3 - cnt ] ) );
+   zipfile->read( temp, 4 );
+   const zseb_32_t rd_chk = stream::str2int( temp, 4 );
+   if ( chcksm != rd_chk ){
+      std::cerr << "Computed CRC32 = " << chcksm << " and read-in CRC32 = " << rd_chk << "." << std::endl;
+      exit( 255 );
    }
-   std::cout << "Computed CRC32 = " << chcksm << " and read-in CRC32 = " << temp << "." << std::endl;
-   assert( chcksm == temp );
-
    // Read ISIZE
-   zipfile->read( readin, 4 );
-   temp = 0;
-   for ( zseb_16_t cnt = 0; cnt < 4; cnt++ ){
-      temp = ( temp << 8 ) ^ ( ( zseb_08_t )( readin[ 3 - cnt ] ) );
+   zipfile->read( temp, 4 );
+   const zseb_32_t rd_isz = stream::str2int( temp, 4 );
+   const zseb_32_t ISIZE  = ( zseb_32_t )( size_file & 0xFFFFFFFFU );
+   if ( ISIZE != rd_isz ){
+      std::cerr << "Computed ISIZE = " << ISIZE << " and read-in ISIZE = " << rd_isz << "." << std::endl;
+      exit( 255 );
    }
-   std::cout << "Computed ISIZE = " << ( size_file & 0xFFFFFFFF ) << " and read-in ISIZE = " << temp << "." << std::endl;
-   assert( ( size_file & 0xFFFFFFFF ) == temp );
 
    std::cout << "zseb: unzip: LZSS  = " << time_lzss << "s." << std::endl;
    std::cout << "             Huff  = " << time_huff << "s." << std::endl;
