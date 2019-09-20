@@ -18,8 +18,7 @@
 */
 
 #include <assert.h>
-#include "huffman.h"
-#include "zseb.h"
+#include "lzss.h"
 #include "crc32.h"
 
 zseb::lzss::lzss( std::string fullfile, const char modus ){
@@ -143,7 +142,7 @@ void zseb::lzss::inflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zs
 
          size_lzss += ( ZSEB_HIST_BIT + ZSEB_LITLEN_BIT + 1 ); // 15-bit dist_shift [ 0 : 32767 ] + 8-bit len_shift [ 0 : 255 ] + 1-bit differentiator
 
-         const zseb_32_t distance = dist_pack[ idx ] + 1;
+         const zseb_32_t distance = dist_pack[ idx ] + ZSEB_DIST_SHIFT;
          const zseb_32_t length   = llen_pack[ idx ] + ZSEB_LENGTH_SHIFT;
 
          for ( zseb_32_t cnt = 0; cnt < length; cnt++ ){
@@ -192,14 +191,16 @@ zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
          longest_ptr0 = longest_ptr1;
          longest_len0 = longest_len1;
       } else {
-      __longest_match__( longest_ptr0, longest_len0, hash_entry, rd_current    , rd_shift ); }
-      __longest_match__( longest_ptr1, longest_len1, next_entry, rd_current + 1, rd_shift );
+      __longest_match__( longest_ptr0, longest_len0, hash_head[ hash_entry ], rd_current     ); }
+      __longest_match__( longest_ptr1, longest_len1, hash_head[ next_entry ], rd_current + 1 );
 
       if ( ( longest_ptr0 == ZSEB_HASH_STOP ) || ( longest_len1 > longest_len0 ) ){ // lazy evaluation
          __append_lit_encode__( llen_pack, dist_pack, wr_current );
          longest_len0 = 1;
       } else {
-         __append_len_encode__( llen_pack, dist_pack, wr_current, ( rd_shift + rd_current ) - longest_ptr0 - 1, longest_len0 - ZSEB_LENGTH_SHIFT );
+         const zseb_16_t dist_shft = ( zseb_16_t )( ( rd_shift + rd_current ) - longest_ptr0 -  ZSEB_DIST_SHIFT );
+         const zseb_08_t  len_shft = ( zseb_08_t )( longest_len0 - ZSEB_LENGTH_SHIFT );
+         __append_len_encode__( llen_pack, dist_pack, wr_current, dist_shft, len_shft );
       }
 
       // hash_prv4[ pos & ZSEB_HIST_MASK ] and hash_prv4[ ( pos + 1 ) & ZSEB_HIST_MASK ] updated via __longest_match__, with pos = rd_shift + rd_current
@@ -240,7 +241,9 @@ zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
          const zseb_64_t lim = ( ( pos > ZSEB_HIST_SIZE ) ? ( pos - ZSEB_HIST_SIZE ) : 0 );
          if ( longest_ptr0 > lim ){
             longest_len0 = 3;
-            __append_len_encode__( llen_pack, dist_pack, wr_current, pos - longest_ptr0 - 1, longest_len0 - ZSEB_LENGTH_SHIFT );
+            const zseb_16_t dist_shft = ( zseb_16_t )( pos - longest_ptr0 -  ZSEB_DIST_SHIFT );
+            const zseb_08_t  len_shft = ( zseb_08_t )( longest_len0 - ZSEB_LENGTH_SHIFT );
+            __append_len_encode__( llen_pack, dist_pack, wr_current, dist_shft, len_shft );
             // No longer update the hash_prvx and hash_head
             rd_current += longest_len0;
          }
@@ -276,10 +279,9 @@ void zseb::lzss::__move_hash__( const zseb_32_t hash_entry ){
 
 }
 
-void zseb::lzss::__longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len, const zseb_32_t hash_entry, const zseb_32_t curr, const zseb_64_t shft ) const{
+void zseb::lzss::__longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len, zseb_64_t ptr, const zseb_32_t curr ) const{
 
-   zseb_64_t form4 = shft + curr; // pos = shft + curr
-   zseb_64_t ptr   = hash_head[ hash_entry ];
+   zseb_64_t form4 = rd_shift + curr; // pos = rd_shift + curr
    const zseb_64_t lim = ( ( form4 > ZSEB_HIST_SIZE ) ? ( form4 - ZSEB_HIST_SIZE ) : 0 );
 
    result_ptr = ZSEB_HASH_STOP;
@@ -293,7 +295,7 @@ void zseb::lzss::__longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len
  //while ( ( ptr != ZSEB_HASH_STOP ) && // Obsolete if "ptr > lim" and "ZSEB_HASH_STOP == 0"
    while ( ( ptr > lim ) && ( result_len < ZSEB_LENGTH_MAX ) ){
 
-      zseb_32_t rd_his = ptr - shft + ini_len;
+      zseb_32_t rd_his = ptr - rd_shift + ini_len;
       zseb_32_t rd_pos = curr + ini_len;
       zseb_32_t rd_lim = ( ( ( curr + ZSEB_LENGTH_MAX ) > rd_end ) ? rd_end : ( curr + ZSEB_LENGTH_MAX ) );
 

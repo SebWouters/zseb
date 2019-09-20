@@ -25,6 +25,7 @@
 #include <string>
 
 #include "dtypes.h"
+#include "stream.h"
 
      // ZSEB_HIST_SIZE    32768U     // 2^15 ( data format, defined in dtypes )
 #define ZSEB_HIST_MASK    ( ZSEB_HIST_SIZE - 1 )
@@ -93,7 +94,7 @@ namespace zseb{
 
          void __readin__();
 
-         void __longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len, const zseb_32_t hash_entry, const zseb_32_t curr, const zseb_64_t shft ) const;
+         void __longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len, zseb_64_t ptr, const zseb_32_t curr ) const;
 
          inline void __move_hash__( const zseb_32_t hash_entry ); // Add hash_entry & rd_current to hash; increment rd_current
 

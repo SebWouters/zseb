@@ -49,7 +49,7 @@ TODO
    - Quicken up LZSS deflate (long enough match; unthorough lazy eval)
    - Handle HEAD X00 (no compress) and X01 (predefined symbols) R/W
    - Command line interface
-   - Handle the return == 2 case for Huffman::unpack
+   - Flush LZSS every 32K read
    - Easy test: draw random/cyclic {0,1,2} for block compress and zip & unzip :-) 
    - Write documentation
 

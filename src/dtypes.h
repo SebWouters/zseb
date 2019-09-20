@@ -31,6 +31,7 @@
 #define ZSEB_LITLEN_BIT   8
 #define ZSEB_LENGTH_SHIFT 3          // length = ZSEB_LENGTH_SHIFT + len_shift
 #define ZSEB_LENGTH_MAX   258U
+#define ZSEB_DIST_SHIFT   1          // distance = ZSEB_DIST_SHIFT + dist_shift
 
 #define ZSEB_256_16T      ( ( zseb_16_t )( 256 ) )
 #define ZSEB_MAX_16T      65535
