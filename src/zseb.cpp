@@ -105,13 +105,13 @@ void zseb::zseb::write_preamble( std::string bigfile ){
    // FLG.FNAME  --> yes
 
    /***  Original filename, terminated by a zero byte block  ***/
-   std::size_t prev = 0;
-   std::size_t curr = bigfile.find( '/', prev );
+   std::size_t prev = std::string::npos;
+   std::size_t curr = bigfile.find( '/', 0 );
    while ( curr != std::string::npos ){
       prev = curr;
       curr = bigfile.find( '/', prev + 1 );
    }
-   std::string stripped = bigfile.substr( prev + 1, std::string::npos );
+   std::string stripped = ( ( prev == std::string::npos ) ? bigfile : bigfile.substr( prev + 1, std::string::npos ) );
    const zseb_32_t length = ( zseb_32_t )( stripped.length() );
    const char * buffer = stripped.c_str();
    zipfile->write( buffer, length );
@@ -286,17 +286,10 @@ void zseb::zseb::zip( const bool debug_test ){
    delete zipfile; // So that file closes...
    zipfile = NULL;
 
-   const double red_lzss = 100.0 * ( 1.0   * size_file - 0.125 * size_lzss ) / size_file;
-   const double red_huff = 100.0 * ( 0.125 * size_lzss -   1.0 * size_zlib ) / size_file;
-
-   if ( debug_test == false ){
-      std::cout << "zseb: zip: LZSS  = " << red_lzss << "%." << std::endl;
-      std::cout << "           Huff  = " << red_huff << "%." << std::endl;
-      std::cout << "           Sum   = " << red_lzss + red_huff << "%." << std::endl;
-   }
-   std::cout << "zseb: zip: Ratio = " << size_file / ( 1.0 * size_zlib ) << std::endl;
-   std::cout << "zseb: zip: LZSS  = " << time_lzss << "s." << std::endl;
-   std::cout << "           Huff  = " << time_huff << "s." << std::endl;
+   std::cout << "zseb: zip: comp(lzss)  = " << size_file / ( 0.125 * size_lzss ) << std::endl;
+   std::cout << "           comp(total) = " << size_file / ( 1.0 * size_zlib ) << std::endl;
+   std::cout << "           time(lzss)  = " << time_lzss << " seconds" << std::endl;
+   std::cout << "           time(huff)  = " << time_huff << " seconds" << std::endl;
 
 }
 
@@ -384,8 +377,8 @@ void zseb::zseb::unzip(){
       exit( 255 );
    }
 
-   std::cout << "zseb: unzip: LZSS  = " << time_lzss << "s." << std::endl;
-   std::cout << "             Huff  = " << time_huff << "s." << std::endl;
+   std::cout << "zseb: unzip: time(lzss)  = " << time_lzss << " seconds" << std::endl;
+   std::cout << "             time(huff)  = " << time_huff << " seconds" << std::endl;
 
 }
 

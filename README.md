@@ -48,7 +48,6 @@ TODO
 
    - Add Calgary corpus
    - Quicken up LZSS deflate (long enough match; unthorough lazy eval)
-   - Command line interface
    - Figure out why 'gzip --best' compresses to a smaller size
    - Move file opening out of LZSS (to allow for name in header)
    - Write documentation
