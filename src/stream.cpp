@@ -148,7 +148,9 @@ zseb_32_t zseb::stream::read( const zseb_16_t nbits ){
 void zseb::stream::nextbyte(){
 
    // For block mode X00, you need to move to next byte for read
-   zseb_16_t temp = read( ibit );
+   if ( ibit > 0 ){
+      zseb_16_t temp = read( ibit );
+   }
 
 }
 

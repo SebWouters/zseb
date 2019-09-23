@@ -27,11 +27,11 @@
 #include "dtypes.h"
 #include "stream.h"
 
-     // ZSEB_HIST_SIZE    32768U     // 2^15 ( data format, defined in dtypes )
+     // ZSEB_HIST_SIZE    32768U                          // 2^15 ( data format, defined in dtypes )
 #define ZSEB_HIST_MASK    ( ZSEB_HIST_SIZE - 1 )
-#define ZSEB_SHIFT        32768U     // Must be an integer multiple of ZSEB_HIST_SIZE, so that ( ZSEB_SHIFT & ZSEB_HIST_MASK ) == 0
-#define ZSEB_TRIGGER      65536U     // ZSEB_SHIFT + ZSEB_HISTORY: if ( rd_current >= ZSEB_TRIGGER ) --> shift
-#define ZSEB_FRAME        66560U     // ZSEB_TRIGGER + 2^10: important that 2^10 > max( length ) = 258 !!!
+#define ZSEB_SHIFT        ( ZSEB_HIST_SIZE )              // Integer multiple of ZSEB_HIST_SIZE: ( ZSEB_SHIFT & ZSEB_HIST_MASK ) == 0
+#define ZSEB_TRIGGER      ( ZSEB_HIST_SIZE + ZSEB_SHIFT ) // If ( rd_current >= ZSEB_TRIGGER ) --> shift
+#define ZSEB_FRAME        ( ZSEB_TRIGGER + 1024U )        // Important that 1024 > max( length ) = 258 !!!
 
 #define ZSEB_HASH_SIZE    16777216U  // ZSEB_LITLEN^3 = 2^24
 #define ZSEB_HASH_MASK    ( ZSEB_HASH_SIZE - 1 )
@@ -56,13 +56,15 @@ namespace zseb{
 
          void copy( stream * zipfile, const zseb_16_t size_copy );
 
+         void uncompressed( stream * zipfile ) const;
+
          zseb_64_t get_lzss_bits() const{ return size_lzss; }
 
          zseb_64_t get_file_bytes() const{ return size_file; }
 
          zseb_32_t get_checksum() const{ return checksum; }
 
-         zseb_64_t get_size_X0() const{ return 8 * ( 1 + 4 + deflate_end - deflate_start ); }
+         zseb_32_t get_LEN() const{ return ( zseb_32_t )( deflate_end - deflate_start ); }
 
       private:
 

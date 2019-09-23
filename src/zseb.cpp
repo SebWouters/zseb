@@ -202,7 +202,7 @@ std::string zseb::zseb::strip_preamble(){
 
 }
 
-void zseb::zseb::zip(){
+void zseb::zseb::zip( const bool debug_test ){
 
    zseb_64_t size_zlib = zipfile->getpos();
 
@@ -215,29 +215,54 @@ void zseb::zseb::zip(){
 
    while ( last_block == 0 ){
 
+      // LZSS a block
       gettimeofday( &start, NULL );
       last_block = flate->deflate( llen_pack, dist_pack, ZSEB_PACK_SIZE, wr_current );
-      const zseb_64_t size_X0 = flate->get_size_X0();
       gettimeofday( &end, NULL );
       time_lzss += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 
+      // Compute dynamic Huffman trees & X01 and X10 sizes
       gettimeofday( &start, NULL );
-      zipfile->write( last_block, 1 );
-      zipfile->write( 2, 2 ); // Dynamic Huffman trees
       coder->calc_tree( llen_pack, dist_pack, wr_current );
-      const zseb_64_t size_X1 = coder->get_size_X1();
-      const zseb_64_t size_X2 = coder->get_size_X2();
-      coder->write_tree( zipfile );
-      coder->pack( zipfile, llen_pack, dist_pack, wr_current );
+      const zseb_32_t size_X1 = coder->get_size_X1();
+      const zseb_32_t size_X2 = coder->get_size_X2();
       gettimeofday( &end, NULL );
       time_huff += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 
-      std::cout << "zseb:zip: block " << cnt_block << std::endl;
-      std::cout << "          size X00 = " << 0.125 * size_X0 << " Bytes." << std::endl;
-      std::cout << "          size X01 = " << 0.125 * size_X1 << " Bytes." << std::endl;
-      std::cout << "          size X10 = " << 0.125 * size_X2 << " Bytes." << std::endl;
-      cnt_block += 1;
+      // What is the minimal output?
+      const zseb_16_t block_form = ( ( debug_test ) ? ( cnt_block % 3 ) : ( ( size_X2 < size_X1 ) ? 2 : 1 ) );
+      zipfile->write( last_block, 1 );
+      zipfile->write( block_form, 2 );
 
+      // Write out
+      if ( block_form == 0 ){
+
+         zipfile->flush();
+         char vals[ 2 ];
+         const zseb_16_t  LEN = ( zseb_16_t )( flate->get_LEN() );
+         const zseb_16_t NLEN = ( ~LEN );
+         stream::int2str(  LEN, vals, 2 ); zipfile->write( vals, 2 );
+         stream::int2str( NLEN, vals, 2 ); zipfile->write( vals, 2 );
+         gettimeofday( &start, NULL );
+         flate->uncompressed( zipfile );
+         gettimeofday( &end, NULL );
+         time_lzss += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
+
+      } else {
+
+         gettimeofday( &start, NULL );
+         if ( block_form == 1 ){ // No need to write trees
+            coder->fixed_tree( 'O' );
+         } else {
+            coder->write_tree( zipfile );
+         }
+         coder->pack( zipfile, llen_pack, dist_pack, wr_current );
+         gettimeofday( &end, NULL );
+         time_huff += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
+
+      }
+
+      cnt_block += 1;
       wr_current = 0;
 
    }
@@ -264,10 +289,12 @@ void zseb::zseb::zip(){
    const double red_lzss = 100.0 * ( 1.0   * size_file - 0.125 * size_lzss ) / size_file;
    const double red_huff = 100.0 * ( 0.125 * size_lzss -   1.0 * size_zlib ) / size_file;
 
-   std::cout << "zseb: zip: LZSS  = " << red_lzss << "%." << std::endl;
-   std::cout << "           Huff  = " << red_huff << "%." << std::endl;
-   std::cout << "           Sum   = " << red_lzss + red_huff << "%." << std::endl;
-   std::cout << "           Ratio = " << size_file / ( 1.0 * size_zlib ) << std::endl;
+   if ( debug_test == false ){
+      std::cout << "zseb: zip: LZSS  = " << red_lzss << "%." << std::endl;
+      std::cout << "           Huff  = " << red_huff << "%." << std::endl;
+      std::cout << "           Sum   = " << red_lzss + red_huff << "%." << std::endl;
+   }
+   std::cout << "zseb: zip: Ratio = " << size_file / ( 1.0 * size_zlib ) << std::endl;
    std::cout << "zseb: zip: LZSS  = " << time_lzss << "s." << std::endl;
    std::cout << "           Huff  = " << time_huff << "s." << std::endl;
 
@@ -294,8 +321,10 @@ void zseb::zseb::unzip(){
          char vals[ 2 ];
          zipfile->read( vals, 2 ); const zseb_16_t  LEN = ( zseb_16_t )( stream::str2int( vals, 2 ) );
          zipfile->read( vals, 2 ); const zseb_16_t NLEN = ( zseb_16_t )( stream::str2int( vals, 2 ) );
-         if ( LEN != ( ~NLEN ) ){
-            std::cerr << "Block type X00: LEN != ( ~NLEN )" << std::endl;
+         const zseb_16_t NLEN2 = ( ~LEN );
+         if ( NLEN != NLEN2 ){
+            std::cerr << "Block type X00: NLEN != ( ~LEN )" << std::endl;
+            exit( 255 );
          }
          flate->copy( zipfile, LEN );
 

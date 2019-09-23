@@ -41,7 +41,7 @@ namespace zseb{
 
          virtual ~zseb();
 
-         void zip();
+         void zip( const bool debug_test );
 
          void unzip();
 

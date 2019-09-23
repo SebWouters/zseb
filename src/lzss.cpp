@@ -124,6 +124,14 @@ void zseb::lzss::copy( stream * zipfile, const zseb_16_t size_copy ){
 
 }
 
+void zseb::lzss::uncompressed( stream * zipfile ) const{
+
+   const zseb_32_t LEN = get_LEN();
+   assert( rd_current >= LEN );
+   zipfile->write( frame + ( rd_current - LEN ), LEN );
+
+}
+
 void zseb::lzss::inflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size_pack ){
 
    for ( zseb_32_t idx = 0; idx < size_pack; idx++ ){

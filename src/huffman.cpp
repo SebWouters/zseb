@@ -273,7 +273,7 @@ void zseb::huffman::fixed_tree( const char modus ){
    for ( zseb_16_t cnt = 144; cnt < 256; cnt++ ){ stat_llen[ cnt ] = 9; } // '9' x 112
    for ( zseb_16_t cnt = 256; cnt < 280; cnt++ ){ stat_llen[ cnt ] = 7; } // '7' x 24
    for ( zseb_16_t cnt = 280; cnt < 288; cnt++ ){ stat_llen[ cnt ] = 8; } // '8' x 8
-   for ( zseb_16_t cnt = 0;   cnt < 30;  cnt++ ){ stat_dist[ cnt ] = 5; } // All dist CL 5
+   for ( zseb_16_t cnt = 0;   cnt < 32;  cnt++ ){ stat_dist[ cnt ] = 5; } // All dist CL 5
 
    // Build trees
    __build_tree__( stat_llen, ZSEB_HUF_LLEN, tree_llen, work, modus, ZSEB_MAX_BITS_LLD );

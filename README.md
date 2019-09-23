@@ -48,13 +48,12 @@ TODO
 
    - Add Calgary corpus
    - Quicken up LZSS deflate (long enough match; unthorough lazy eval)
-   - Handle HEAD X00 (no compress) and X01 (predefined symbols) R/W
    - Command line interface
-   - Choose compression method (X00, X01, X10) according to minimal size
    - Figure out why 'gzip --best' compresses to a smaller size
    - Move file opening out of LZSS (to allow for name in header)
-   - Easy test: draw random/cyclic {0,1,2} for block compress and zip & unzip :-) 
    - Write documentation
+   - dtypes.h: Ensure zseb_32_t is 32-bit in stead of assert()
+   - Fixed Huffman trees hardcoded?
 
 Documentation
 -------------

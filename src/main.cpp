@@ -23,7 +23,7 @@ int main(){
 
    zseb::zseb zipper( "tests/bible.txt", "dump.gz", 'Z' );
    zipper.write_preamble( "tests/bible.txt" );
-   zipper.zip();
+   zipper.zip( true );
 
    zseb::zseb unzipper( "dump.gz", "dump.unzip.txt", 'U' );
    std::string origname = unzipper.strip_preamble();

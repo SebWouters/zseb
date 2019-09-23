@@ -28,12 +28,12 @@
 #include "stream.h"
 
 #define ZSEB_HUF_LLEN       288      // 0-255 lit; 256 stop; 257-285 len; 286 and 287 unused
-#define ZSEB_HUF_DIST       30       // 0-29 dist
-#define ZSEB_HUF_COMBI      318      // ZSEB_HUF_LLEN + ZSEB_HUF_DIST
+#define ZSEB_HUF_DIST       32       // 0-29 dist; 30 and 31 unused
 #define ZSEB_HUF_SSQ        19       // 0-15 prefix length; 16 prev rep; 17 small zero seq; 18 large zero seq
-#define ZSEB_HUF_TREE_LLEN  575      // 2 * ZSEB_HUF_LLEN - 1: WCS each llen_code encountered at least once
-#define ZSEB_HUF_TREE_DIST  59       // 2 * ZSEB_HUF_DIST - 1: WCS each dist_code encountered at least once
-#define ZSEB_HUF_TREE_SSQ   37       // 2 * ZSEB_HUF_SSQ  - 1: WCS each  ssq_code encountered at least once
+#define ZSEB_HUF_COMBI      ( ZSEB_HUF_LLEN + ZSEB_HUF_DIST )
+#define ZSEB_HUF_TREE_LLEN  ( 2 * ZSEB_HUF_LLEN - 1 )
+#define ZSEB_HUF_TREE_DIST  ( 2 * ZSEB_HUF_DIST - 1 )
+#define ZSEB_HUF_TREE_SSQ   ( 2 * ZSEB_HUF_SSQ  - 1 )
 
 #define ZSEB_MAX_BITS_LLD   15
 #define ZSEB_MAX_BITS_SSQ   7
@@ -74,9 +74,9 @@ namespace zseb{
 
          /***  Get sizes of fixed / dynamic trees  ***/
 
-         zseb_64_t get_size_X1() const{ return size_X1; }
+         zseb_32_t get_size_X1() const{ return size_X1; }
 
-         zseb_64_t get_size_X2() const{ return size_X2; }
+         zseb_32_t get_size_X2() const{ return size_X2; }
 
       private:
 
@@ -102,9 +102,9 @@ namespace zseb{
 
          bool * work; // Length ZSEB_HUF_TREE_LLEN; purely for combinations of zseb_node's in __build_tree__ modus 'I'
 
-         zseb_64_t size_X1;
+         zseb_32_t size_X1;
 
-         zseb_64_t size_X2;
+         zseb_32_t size_X2;
 
          /***  HELPER FUNCTIONS  ***/
 
