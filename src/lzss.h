@@ -56,11 +56,13 @@ namespace zseb{
 
          void copy( stream * zipfile, const zseb_16_t size_copy );
 
-         zseb_64_t get_lzss_bits() const{ return size_lzss; };
+         zseb_64_t get_lzss_bits() const{ return size_lzss; }
 
-         zseb_64_t get_file_bytes() const{ return size_file; };
+         zseb_64_t get_file_bytes() const{ return size_file; }
 
-         zseb_32_t get_checksum() const{ return checksum; };
+         zseb_32_t get_checksum() const{ return checksum; }
+
+         zseb_64_t get_size_X0() const{ return 8 * ( 1 + 4 + deflate_end - deflate_start ); }
 
       private:
 
@@ -81,6 +83,10 @@ namespace zseb{
          zseb_32_t rd_end;     // Current validly filled length of frame [ 0 : ZSEB_FRAME ]
 
          zseb_32_t rd_current; // Current position within frame; ergo current position within file = rd_shift + rd_current
+
+         zseb_64_t deflate_start;
+
+         zseb_64_t deflate_end;
 
          /***  Hash table  ***/
 

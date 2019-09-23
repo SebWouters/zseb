@@ -60,7 +60,9 @@ namespace zseb{
 
          void load_tree( stream * zipfile );
 
-         void calc_write_tree( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size );
+         void calc_tree( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size );
+
+         void write_tree( stream * zipfile ) const;
 
          void fixed_tree( const char modus );
 
@@ -69,6 +71,12 @@ namespace zseb{
          void pack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size );
 
          zseb_32_t unpack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack );
+
+         /***  Get sizes of fixed / dynamic trees  ***/
+
+         zseb_64_t get_size_X1() const{ return size_X1; }
+
+         zseb_64_t get_size_X2() const{ return size_X2; }
 
       private:
 
@@ -84,13 +92,25 @@ namespace zseb{
 
          zseb_node * tree_ssq;  // Length ZSEB_HUF_TREE_SSQ
 
+         zseb_16_t HLIT;
+
+         zseb_16_t HDIST;
+
+         zseb_16_t HCLEN;
+
+         zseb_16_t size_ssq;
+
          bool * work; // Length ZSEB_HUF_TREE_LLEN; purely for combinations of zseb_node's in __build_tree__ modus 'I'
+
+         zseb_64_t size_X1;
+
+         zseb_64_t size_X2;
 
          /***  HELPER FUNCTIONS  ***/
 
          static inline zseb_16_t __bit_reverse__( zseb_16_t code, const zseb_16_t nbits );
 
-         static void __prefix_lengths__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, const zseb_16_t ZSEB_MAX_BITS );
+         static zseb_16_t __prefix_lengths__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, const zseb_16_t ZSEB_MAX_BITS );
 
          static void __build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, bool * temp, const char option, const zseb_16_t ZSEB_MAX_BITS );
 
@@ -114,9 +134,7 @@ namespace zseb{
 
          static const zseb_16_t add_dist[ 30 ];  // base_distance = 1 + add_dist[ code_distance ];
 
-         static const zseb_08_t bit_ssq[ 19 ];
-
-         static const zseb_08_t ssq_pos2sym[ 19 ];
+         static const zseb_08_t map_ssq[ 19 ];
 
          /***  CONVERSIONS  ***/
 

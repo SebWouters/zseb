@@ -166,6 +166,8 @@ void zseb::lzss::inflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zs
 
 zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size_pack, zseb_32_t &wr_current ){
 
+   deflate_start = rd_shift + rd_current;
+
    if ( ( rd_end == ZSEB_FRAME ) && ( rd_current >= ZSEB_TRIGGER ) ){
 
       for ( zseb_32_t cnt = 0; cnt < ( rd_end - ZSEB_SHIFT ); cnt++ ){
@@ -232,6 +234,7 @@ zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
    if ( upper_limit != limit2 ){ // rd_end further down the road
 
       assert( wr_current <= size_pack );
+      deflate_end = rd_shift + rd_current;
       return 0; // Not yet last block
 
    } else {
@@ -257,6 +260,7 @@ zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
       }
 
       assert( wr_current <= size_pack );
+      deflate_end = rd_shift + rd_current;
       return 1; // Last block
 
    }

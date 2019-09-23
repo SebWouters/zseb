@@ -207,6 +207,7 @@ void zseb::zseb::zip(){
    zseb_64_t size_zlib = zipfile->getpos();
 
    zseb_32_t last_block = 0;
+   zseb_32_t  cnt_block = 0;
 
    struct timeval start, end;
    double time_lzss = 0;
@@ -216,16 +217,26 @@ void zseb::zseb::zip(){
 
       gettimeofday( &start, NULL );
       last_block = flate->deflate( llen_pack, dist_pack, ZSEB_PACK_SIZE, wr_current );
+      const zseb_64_t size_X0 = flate->get_size_X0();
       gettimeofday( &end, NULL );
       time_lzss += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 
       gettimeofday( &start, NULL );
       zipfile->write( last_block, 1 );
       zipfile->write( 2, 2 ); // Dynamic Huffman trees
-      coder->calc_write_tree( zipfile, llen_pack, dist_pack, wr_current );
+      coder->calc_tree( llen_pack, dist_pack, wr_current );
+      const zseb_64_t size_X1 = coder->get_size_X1();
+      const zseb_64_t size_X2 = coder->get_size_X2();
+      coder->write_tree( zipfile );
       coder->pack( zipfile, llen_pack, dist_pack, wr_current );
       gettimeofday( &end, NULL );
       time_huff += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
+
+      std::cout << "zseb:zip: block " << cnt_block << std::endl;
+      std::cout << "          size X00 = " << 0.125 * size_X0 << " Bytes." << std::endl;
+      std::cout << "          size X01 = " << 0.125 * size_X1 << " Bytes." << std::endl;
+      std::cout << "          size X10 = " << 0.125 * size_X2 << " Bytes." << std::endl;
+      cnt_block += 1;
 
       wr_current = 0;
 

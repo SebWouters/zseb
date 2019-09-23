@@ -20,7 +20,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 Information
 -----------
 
-A GZIP/DEFLATE compatible implementation (work in progress).
+A GZIP/DEFLATE compatible implementation, according to RFC 1951 and RFC
+1952 (work in progress).
 
 The algorithm makes use of a minimalistic Morphing Match Chain (MMC).
 In the code, multiple hash chains are used:
@@ -49,7 +50,9 @@ TODO
    - Quicken up LZSS deflate (long enough match; unthorough lazy eval)
    - Handle HEAD X00 (no compress) and X01 (predefined symbols) R/W
    - Command line interface
-   - Flush LZSS every 32K read
+   - Choose compression method (X00, X01, X10) according to minimal size
+   - Figure out why 'gzip --best' compresses to a smaller size
+   - Move file opening out of LZSS (to allow for name in header)
    - Easy test: draw random/cyclic {0,1,2} for block compress and zip & unzip :-) 
    - Write documentation
 
