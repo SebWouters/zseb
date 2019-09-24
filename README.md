@@ -17,22 +17,17 @@ You should have received a copy of the GNU General Public License along
 with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-Information
------------
+Info
+----
 
-A GZIP/DEFLATE compatible implementation, according to RFC 1951 and RFC
-1952 (work in progress).
+zseb is a GZIP/DEFLATE implementation compatible with RFC 1951 and RFC
+1952. zseb makes use of a minimalistic Morphing Match Chain (MMC) with
+two hash chains for respectively 3- and 4-character identities.
 
-The algorithm makes use of a minimalistic Morphing Match Chain (MMC).
-In the code, multiple hash chains are used:
-
-   - **hash_prv3** is a hash chain of 3-character identities; and
-   - **hash_prv4** is a hash chain of 4-character identities.
-
-As in gzip, **hash_prv3** is initially followed. Meanwhile, **hash_prv4** is
-updated correspondigly, until a chain is picked up on **hash_prv4**. From
-then on, **hash_prv4** is followed instead of **hash_prv3** and **hash_prv4** no
-longer needs to be updated. In ASCII art:
+As in gzip, **hash_prv3** is initially followed. Meanwhile, **hash_prv4**
+is updated correspondigly, until a chain is picked up on **hash_prv4**.
+From then on, **hash_prv4** is followed instead of **hash_prv3** and
+**hash_prv4** no longer needs to be updated. In ASCII art:
 
     abcd1abce2abcf3abcg4abch5abci6abcj7abck8abcl9abcg0abcd1abce2abcf3abcg4abch5abci6abcj7abck8abcl9abcg0
                    |                             |                   |    |    |    |    |    |    |
@@ -43,16 +38,10 @@ longer needs to be updated. In ASCII art:
     ---------------<-----------------------------<--------------------
                    ptr8                          ptr7                                                   using hash_prv4
 
-TODO
-----
+Bugs and suggestions
+--------------------
 
-   - Add Calgary corpus
-   - Quicken up LZSS deflate (long enough match; unthorough lazy eval)
-   - Figure out why 'gzip --best' compresses to a smaller size
-   - Move file opening out of LZSS (to allow for name in header)
-   - Write documentation
-   - dtypes.h: Ensure zseb_32_t is 32-bit in stead of assert()
-   - Fixed Huffman trees hardcoded?
+Please send bugs and suggestions to <sebastianwouters@gmail.com>.
 
 Documentation
 -------------

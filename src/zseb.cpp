@@ -26,7 +26,7 @@
 #include "zseb.h"
 #include "crc32.h"
 
-zseb::zseb::zseb( std::string toread, std::string towrite, const char modus ){
+zseb::zseb::zseb( std::string packfile, const char modus, const bool verbose ){
 
    assert( sizeof( zseb_08_t ) == 1 );
    assert( sizeof( zseb_16_t ) == 2 );
@@ -35,35 +35,13 @@ zseb::zseb::zseb( std::string toread, std::string towrite, const char modus ){
 
    assert( ( modus == 'Z' ) || ( modus == 'U' ) );
 
+   print     = verbose;
    flate     = NULL;
-   coder     = NULL;
-   zipfile   = NULL;
-   llen_pack = NULL;
-   dist_pack = NULL;
-
-   if ( modus == 'Z' ){
-
-      flate   = new lzss( toread, modus );
-      coder   = new huffman();
-      zipfile = new stream( towrite, 'W' );
-
-      llen_pack  = new zseb_08_t[ ZSEB_PACK_SIZE ];
-      dist_pack  = new zseb_16_t[ ZSEB_PACK_SIZE ];
-      wr_current = 0;
-
-   }
-
-   if ( modus == 'U' ){
-
-      flate   = new lzss( towrite, modus );
-      coder   = new huffman();
-      zipfile = new stream( toread, 'R' );
-
-      llen_pack  = new zseb_08_t[ ZSEB_PACK_SIZE ];
-      dist_pack  = new zseb_16_t[ ZSEB_PACK_SIZE ];
-      wr_current = 0;
-
-   }
+   coder     = new huffman();
+   zipfile   = new stream( packfile, ( ( modus == 'Z' ) ? 'W' : 'R' ) );
+   llen_pack = new zseb_08_t[ ZSEB_PACK_SIZE ];
+   dist_pack = new zseb_16_t[ ZSEB_PACK_SIZE ];
+   wr_current = 0;
 
 }
 
@@ -74,6 +52,12 @@ zseb::zseb::~zseb(){
    if ( zipfile != NULL ){ delete zipfile; }
    if ( llen_pack != NULL ){ delete [] llen_pack; }
    if ( dist_pack != NULL ){ delete [] dist_pack; }
+
+}
+
+void zseb::zseb::setup_flate( std::string bigfile, const char modus ){
+
+   flate = new lzss( bigfile, modus );
 
 }
 
@@ -89,7 +73,13 @@ void zseb::zseb::write_preamble( std::string bigfile ){
    const zseb_32_t result = stat( bigfile.c_str(), &info );
    assert( result == 0 );
    const zseb_32_t MTIME = ( zseb_32_t )( info.st_mtime );
-   std::cout << "MTIME = " << MTIME << std::endl;
+   if ( print ){
+      struct tm * dt;
+      char buffer [ 30 ];
+      dt = localtime( &info.st_mtime );
+      strftime( buffer, sizeof( buffer ), "%d/%m/%y %H:%M", dt );
+      std::cout << "MTIME = " << std::string( buffer ) << std::endl;
+   }
    stream::int2str( MTIME, temp, 4 );
 
    /***  GZIP header  ***/
@@ -116,11 +106,11 @@ void zseb::zseb::write_preamble( std::string bigfile ){
    const char * buffer = stripped.c_str();
    zipfile->write( buffer, length );
    crc16 = crc32::update( crc16, buffer, length );
-   std::cout << "FNAME = [";
-   for ( zseb_16_t cnt = 0; cnt < length; cnt++ ){
-      std::cout << buffer[ cnt ];
+   if ( print ){
+      std::cout << "FNAME = [";
+      for ( zseb_16_t cnt = 0; cnt < length; cnt++ ){ std::cout << buffer[ cnt ]; }
+      std::cout << "]" << std::endl;
    }
-   std::cout << "]" << std::endl;
    /* ZER */ var = ( zseb_08_t )( 0 );    zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
 
    // FLG.FCOMMENT --> no
@@ -157,7 +147,14 @@ std::string zseb::zseb::strip_preamble(){
    /* OS    */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
 
    /***  Print MTIME  ***/
-   std::cout << "MTIME = " << MTIME << std::endl;
+   if ( print ){
+      struct tm * dt;
+      char buffer [ 30 ];
+      const time_t dump = ( time_t )( MTIME );
+      dt = localtime( &dump );
+      strftime( buffer, sizeof( buffer ), "%d/%m/%y %H:%M", dt );
+      std::cout << "MTIME = " << std::string( buffer ) << std::endl;
+   }
 
    if ( FEXTRA ){
       zipfile->read( temp, 2 );
@@ -178,7 +175,7 @@ std::string zseb::zseb::strip_preamble(){
          proceed = ( ( zseb_08_t )( var ) != 0 );
          if ( proceed ){ filename += var; }
       }
-      std::cout << "FNAME = [" << filename << "]" << std::endl;
+      if ( print ){ std::cout << "FNAME = [" << filename << "]" << std::endl; }
    }
 
    if ( FCOMMENT ){
@@ -200,11 +197,13 @@ std::string zseb::zseb::strip_preamble(){
       }
    }
 
+   return filename;
+
 }
 
 void zseb::zseb::zip( const bool debug_test ){
 
-   zseb_64_t size_zlib = zipfile->getpos();
+   zseb_64_t size_zlib = zipfile->getpos(); // Preamble are full bytes
 
    zseb_32_t last_block = 0;
    zseb_32_t  cnt_block = 0;
@@ -268,7 +267,7 @@ void zseb::zseb::zip( const bool debug_test ){
    }
 
    zipfile->flush();
-   size_zlib = zipfile->getpos() - size_zlib; // Bytes
+   size_zlib = zipfile->getpos() - size_zlib; // Bytes after flush
 
    const zseb_32_t chcksm    = flate->get_checksum();
    const zseb_64_t size_file = flate->get_file_bytes();
@@ -286,14 +285,18 @@ void zseb::zseb::zip( const bool debug_test ){
    delete zipfile; // So that file closes...
    zipfile = NULL;
 
-   std::cout << "zseb: zip: comp(lzss)  = " << size_file / ( 0.125 * size_lzss ) << std::endl;
-   std::cout << "           comp(total) = " << size_file / ( 1.0 * size_zlib ) << std::endl;
-   std::cout << "           time(lzss)  = " << time_lzss << " seconds" << std::endl;
-   std::cout << "           time(huff)  = " << time_huff << " seconds" << std::endl;
+   if ( print ){
+      std::cout << "zseb: zip: comp(lzss)  = " << size_file / ( 0.125 * size_lzss ) << std::endl;
+      std::cout << "           comp(total) = " << size_file / ( 1.0 * size_zlib ) << std::endl;
+      std::cout << "           time(lzss)  = " << time_lzss << " seconds" << std::endl;
+      std::cout << "           time(huff)  = " << time_huff << " seconds" << std::endl;
+   }
 
 }
 
 void zseb::zseb::unzip(){
+
+   zseb_64_t size_zlib = zipfile->getpos(); // Preamble are full Bytes
 
    zseb_32_t last_block = 0;
    zseb_32_t block_form;
@@ -356,9 +359,11 @@ void zseb::zseb::unzip(){
 
    flate->flush();
    zipfile->nextbyte();
+   size_zlib = zipfile->getpos() - size_zlib; // Bytes after nextbyte
 
    const zseb_32_t chcksm    = flate->get_checksum();
    const zseb_64_t size_file = flate->get_file_bytes(); // Set on flush
+   const zseb_64_t size_lzss = flate->get_lzss_bits();
 
    char temp[ 4 ];
    // Read CRC32
@@ -377,8 +382,12 @@ void zseb::zseb::unzip(){
       exit( 255 );
    }
 
-   std::cout << "zseb: unzip: time(lzss)  = " << time_lzss << " seconds" << std::endl;
-   std::cout << "             time(huff)  = " << time_huff << " seconds" << std::endl;
+   if ( print ){
+      std::cout << "zseb: unzip: comp(lzss)  = " << size_file / ( 0.125 * size_lzss ) << std::endl;
+      std::cout << "             comp(total) = " << size_file / ( 1.0 * size_zlib ) << std::endl;
+      std::cout << "             time(lzss)  = " << time_lzss << " seconds" << std::endl;
+      std::cout << "             time(huff)  = " << time_huff << " seconds" << std::endl;
+   }
 
 }
 

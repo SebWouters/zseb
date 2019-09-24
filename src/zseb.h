@@ -29,7 +29,7 @@
 #include "lzss.h"
 #include "huffman.h"
 
-#define ZSEB_PACK_SIZE      32776U     // ZSEB_HIST_SIZE + 2^3:  important that 2^3  >= 4!
+#define ZSEB_PACK_SIZE      ( ZSEB_HIST_SIZE + 8U )  // Important that 8 >= 4!
 
 namespace zseb{
 
@@ -37,9 +37,11 @@ namespace zseb{
 
       public:
 
-         zseb( std::string toread, std::string towrite, const char modus );
+         zseb( std::string packfile, const char modus, const bool verbose );
 
          virtual ~zseb();
+
+         void setup_flate( std::string bigfile, const char modus );
 
          void zip( const bool debug_test );
 
@@ -62,6 +64,8 @@ namespace zseb{
          zseb_16_t * dist_pack; // Length ZSEB_WR_FRAME; contains dist_shift [ 0 : 32767 ] with 65535 means literal
 
          zseb_32_t wr_current;  // Currently validly filled length of llen_pack and dist_pack
+
+         bool print;
 
    };
 
