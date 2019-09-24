@@ -17,7 +17,7 @@
    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#define ZSEB_VERSION   "UNRELEASED"
+#define ZSEB_VERSION   "0.9.0"
 
 #include <getopt.h>
 #include "zseb.h"
@@ -45,6 +45,9 @@ std::cout << "\n"
 "       -o, --output=outfile\n"
 "              Output to outfile.\n"
 "\n"
+"       -n, --name\n"
+"              Use or restore name.\n"
+"\n"
 "       -p, --print\n"
 "              Print compression and timing.\n"
 "\n"
@@ -64,6 +67,7 @@ int main( int argc, char ** argv ){
    char modus = 'A';
    std::string outfile;
    bool outset = false;
+   bool name = false;
    bool print = false;
 
    struct option long_options[] =
@@ -71,6 +75,7 @@ int main( int argc, char ** argv ){
       {"zip",     required_argument, 0, 'z'},
       {"unzip",   required_argument, 0, 'u'},
       {"output",  required_argument, 0, 'o'},
+      {"name",    no_argument,       0, 'n'},
       {"print",   no_argument,       0, 'p'},
       {"version", no_argument,       0, 'v'},
       {"help",    no_argument,       0, 'h'},
@@ -79,7 +84,7 @@ int main( int argc, char ** argv ){
 
    int option_index = 0;
    int c;
-   while (( c = getopt_long( argc, argv, "hvz:u:o:p", long_options, &option_index )) != -1 ){
+   while (( c = getopt_long( argc, argv, "hvz:u:o:np", long_options, &option_index )) != -1 ){
       switch( c ){
          case 'h':
          case '?':
@@ -102,6 +107,9 @@ int main( int argc, char ** argv ){
             outfile = optarg;
             outset = true;
             break;
+         case 'n':
+            name = true;
+            break;
          case 'p':
             print = true;
             break;
@@ -114,18 +122,20 @@ int main( int argc, char ** argv ){
       return 0;
    }
 
-   if ( outset == false ){
-      std::cerr << "zseb: option -o must be specified" << std::endl;
+   if ( ( outset == false ) && ( name == false ) ){
+      std::cerr << "zseb: option -o or -n must be specified" << std::endl;
       print_help();
       return 0;
    }
 
    if ( modus == 'Z' ){
 
+      if ( name ){ outfile = infile + ".gz"; }
       zseb::zseb zipper( outfile, 'Z', print );
       zipper.write_preamble( infile );
       zipper.setup_flate( infile, 'Z' );
       zipper.zip();
+      zipper.set_time( outfile );
 
    }
 
@@ -133,13 +143,14 @@ int main( int argc, char ** argv ){
 
       zseb::zseb unzipper( infile, 'U', print );
       std::string origname = unzipper.strip_preamble();
+      if ( name ){ outfile = origname; }
       unzipper.setup_flate( outfile, 'U' );
       unzipper.unzip();
+      unzipper.set_time( outfile );
 
    }
 
    return 0;
 
 }
-
 

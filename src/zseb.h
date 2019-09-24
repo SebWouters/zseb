@@ -51,6 +51,8 @@ namespace zseb{
 
          std::string strip_preamble();
 
+         void set_time( std::string filename );
+
       private:
 
          lzss * flate;
@@ -66,6 +68,8 @@ namespace zseb{
          zseb_32_t wr_current;  // Currently validly filled length of llen_pack and dist_pack
 
          bool print;
+
+         zseb_32_t mtime;
 
    };
 

@@ -20,6 +20,8 @@
 #include <assert.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <time.h>
+#include <utime.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -42,6 +44,7 @@ zseb::zseb::zseb( std::string packfile, const char modus, const bool verbose ){
    llen_pack = new zseb_08_t[ ZSEB_PACK_SIZE ];
    dist_pack = new zseb_16_t[ ZSEB_PACK_SIZE ];
    wr_current = 0;
+   mtime     = 0;
 
 }
 
@@ -61,6 +64,15 @@ void zseb::zseb::setup_flate( std::string bigfile, const char modus ){
 
 }
 
+void zseb::zseb::set_time( std::string filename ){
+
+   struct utimbuf overwrite;
+   overwrite.actime  = time( NULL ); // Present
+   overwrite.modtime = mtime;        // Modication time original file
+   utime( filename.c_str(), &overwrite );
+
+}
+
 void zseb::zseb::write_preamble( std::string bigfile ){
 
    /***  Variables  ***/
@@ -70,10 +82,12 @@ void zseb::zseb::write_preamble( std::string bigfile ){
 
    /***  Fetch last modification time  ***/
    struct stat info;
-   const zseb_32_t result = stat( bigfile.c_str(), &info );
-   assert( result == 0 );
-   const zseb_32_t MTIME = ( zseb_32_t )( info.st_mtime );
-   stream::int2str( MTIME, temp, 4 );
+   if ( stat( bigfile.c_str(), &info ) != 0 ){
+      std::cerr << "zseb: Unable to open " << bigfile << "." << std::endl;
+      exit( 255 );
+   }
+   mtime = ( zseb_32_t )( info.st_mtime );
+   stream::int2str( mtime, temp, 4 );
 
    /***  GZIP header  ***/
    /* ID1 */ var = ( zseb_08_t )( 0x1F ); zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
@@ -118,19 +132,19 @@ std::string zseb::zseb::strip_preamble(){
    char temp[ 4 ];
 
    /***  GZIP header  ***/
-   /* ID1 */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); if ( ( zseb_08_t )( var ) != 0x1F ){ std::cerr << "Incompatible ID1." << std::endl; exit( 255 ); }
-   /* ID2 */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); if ( ( zseb_08_t )( var ) != 0x8B ){ std::cerr << "Incompatible ID2." << std::endl; exit( 255 ); }
-   /* CM  */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); if ( ( zseb_08_t )( var ) != 8    ){ std::cerr << "Incompatible CM."  << std::endl; exit( 255 ); }
+   /* ID1 */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); if ( ( zseb_08_t )( var ) != 0x1F ){ std::cerr << "zseb: Incompatible ID1." << std::endl; exit( 255 ); }
+   /* ID2 */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); if ( ( zseb_08_t )( var ) != 0x8B ){ std::cerr << "zseb: Incompatible ID2." << std::endl; exit( 255 ); }
+   /* CM  */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); if ( ( zseb_08_t )( var ) != 8    ){ std::cerr << "zseb: Incompatible CM."  << std::endl; exit( 255 ); }
    /* FLG */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); const zseb_08_t FLG = ( zseb_08_t )( var );
-   if ( ( ( FLG >> 7 ) & 1U ) == 1U ){ std::cerr << "Reserved bit is non-zero." << std::endl; exit( 255 ); }
-   if ( ( ( FLG >> 6 ) & 1U ) == 1U ){ std::cerr << "Reserved bit is non-zero." << std::endl; exit( 255 ); }
-   if ( ( ( FLG >> 5 ) & 1U ) == 1U ){ std::cerr << "Reserved bit is non-zero." << std::endl; exit( 255 ); }
+   if ( ( ( FLG >> 7 ) & 1U ) == 1U ){ std::cerr << "zseb: Reserved bit is non-zero." << std::endl; exit( 255 ); }
+   if ( ( ( FLG >> 6 ) & 1U ) == 1U ){ std::cerr << "zseb: Reserved bit is non-zero." << std::endl; exit( 255 ); }
+   if ( ( ( FLG >> 5 ) & 1U ) == 1U ){ std::cerr << "zseb: Reserved bit is non-zero." << std::endl; exit( 255 ); }
    const bool FCOMMENT = ( ( ( FLG >> 4 ) & 1U ) == 1U );
    const bool FNAME    = ( ( ( FLG >> 3 ) & 1U ) == 1U );
    const bool FEXTRA   = ( ( ( FLG >> 2 ) & 1U ) == 1U );
    const bool FHCRC    = ( ( ( FLG >> 1 ) & 1U ) == 1U );
    const bool FTEXT    = ( (   FLG        & 1U ) == 1U );
-   /* MTIME */ zipfile->read( temp, 4 ); crc16 = crc32::update( crc16, temp, 4 ); const zseb_32_t MTIME = stream::str2int( temp, 4 );
+   /* MTIME */ zipfile->read( temp, 4 ); crc16 = crc32::update( crc16, temp, 4 ); mtime = stream::str2int( temp, 4 );
    /* XFL   */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
    /* OS    */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
 
@@ -169,7 +183,7 @@ std::string zseb::zseb::strip_preamble(){
       const zseb_32_t checksum = stream::str2int( temp, 2 );
       crc16 = crc16 & ZSEB_MASK_16T;
       if ( checksum != crc16 ){
-         std::cerr << "Computed CRC16 = " << crc16 << " and read-in CRC16 = " << checksum << "." << std::endl;
+         std::cerr << "zseb: Computed CRC16 = " << crc16 << " if different from read-in CRC16 = " << checksum << "." << std::endl;
          exit( 255 );
       }
    }
@@ -261,6 +275,9 @@ void zseb::zseb::zip(){
    delete zipfile; // So that file closes...
    zipfile = NULL;
 
+   delete flate; // So that file closes...
+   flate = NULL;
+
    if ( print ){
       std::cout << "zseb: zip: comp(lzss)  = " << size_file / ( 0.125 * size_lzss ) << std::endl;
       std::cout << "           comp(total) = " << size_file / ( 1.0 * size_zlib ) << std::endl;
@@ -285,7 +302,10 @@ void zseb::zseb::unzip(){
 
       last_block = zipfile->read( 1 );
       block_form = zipfile->read( 2 ); // '10'_b dyn trees, '01'_b fixed trees, '00'_b uncompressed, '11'_b error
-      assert( block_form < 3 );
+      if ( block_form == 3 ){
+         std::cerr << "zseb: X11 is not a valid block mode." << std::endl;
+         exit( 255 );
+      }
 
       if ( block_form == 0 ){
 
@@ -295,7 +315,7 @@ void zseb::zseb::unzip(){
          zipfile->read( vals, 2 ); const zseb_16_t NLEN = ( zseb_16_t )( stream::str2int( vals, 2 ) );
          const zseb_16_t NLEN2 = ( ~LEN );
          if ( NLEN != NLEN2 ){
-            std::cerr << "Block type X00: NLEN != ( ~LEN )" << std::endl;
+            std::cerr << "zseb: Block type X00: NLEN != ( ~LEN )" << std::endl;
             exit( 255 );
          }
          flate->copy( zipfile, LEN );
@@ -346,7 +366,7 @@ void zseb::zseb::unzip(){
    zipfile->read( temp, 4 );
    const zseb_32_t rd_chk = stream::str2int( temp, 4 );
    if ( chcksm != rd_chk ){
-      std::cerr << "Computed CRC32 = " << chcksm << " and read-in CRC32 = " << rd_chk << "." << std::endl;
+      std::cerr << "zseb: Computed CRC32 = " << chcksm << " is different from read-in CRC32 = " << rd_chk << "." << std::endl;
       exit( 255 );
    }
    // Read ISIZE
@@ -354,9 +374,15 @@ void zseb::zseb::unzip(){
    const zseb_32_t rd_isz = stream::str2int( temp, 4 );
    const zseb_32_t ISIZE  = ( zseb_32_t )( size_file & ZSEB_MASK_32T );
    if ( ISIZE != rd_isz ){
-      std::cerr << "Computed ISIZE = " << ISIZE << " and read-in ISIZE = " << rd_isz << "." << std::endl;
+      std::cerr << "zseb: Computed ISIZE = " << ISIZE << " is different from read-in ISIZE = " << rd_isz << "." << std::endl;
       exit( 255 );
    }
+
+   delete zipfile;
+   zipfile = NULL;
+
+   delete flate;
+   flate = NULL;
 
    if ( print ){
       std::cout << "zseb: unzip: comp(lzss)  = " << size_file / ( 0.125 * size_lzss ) << std::endl;

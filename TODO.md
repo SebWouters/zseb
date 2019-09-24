@@ -6,4 +6,5 @@ Todo
    - Write documentation
    - dtypes.h: Ensure zseb_32_t is 32-bit in stead of assert()
    - Fixed Huffman trees hardcoded?
+   - Why is the sys time so large? (gzip quasi zero)
 

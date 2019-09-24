@@ -46,7 +46,7 @@ zseb::stream::stream( std::string filename, const char modus ){
 
       } else {
 
-         std::cerr << "zseb::stream: Unable to open " << filename << "." << std::endl;
+         std::cerr << "zseb: Unable to open " << filename << "." << std::endl;
          exit( 255 );
 
       }
