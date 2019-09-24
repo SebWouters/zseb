@@ -141,7 +141,7 @@ void zseb::lzss::inflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zs
 
          size_lzss += ( ZSEB_LITLEN_BIT + 1 ); // 8-bit literal [ 0 : 255 ] + 1-bit differentiator
 
-         frame[ rd_current ] = llen_pack[ idx ];
+         frame[ rd_current ] = ( char )( llen_pack[ idx ] );
          rd_current += 1;
 
       } else { // copy ( LEN, DIST )

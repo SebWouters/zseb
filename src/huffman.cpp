@@ -654,30 +654,56 @@ zseb_16_t zseb::huffman::__prefix_lengths__( zseb_16_t * stat, const zseb_16_t s
    }
 
    // Decrement lengths > ZSEB_MAX_BITS
-   zseb_16_t tomove = 0;
-   for ( zseb_16_t pack = 0; pack < num; pack++ ){
-      if ( tree[ pack ].info > ZSEB_MAX_BITS ){ // Bit length
-         tomove += ( tree[ pack ].info - ZSEB_MAX_BITS ); // Excess bit length
+   zseb_16_t overflow = 0; // Number of nodes with excess bit length
+   for ( zseb_16_t pack = 0; pack < root; pack++ ){
+      if ( tree[ pack ].info > ZSEB_MAX_BITS ){ // Excess bit length
+         overflow += 1;
          tree[ pack ].info = ZSEB_MAX_BITS; // Bit length
       }
    }
 
-   // Move decrements: Least harm? Lengths < ZSEB_MAX_BITS with smallest associated frequency
-   while ( tomove > 0 ){
-      zseb_16_t rare = ZSEB_MAX_16T;
-      for ( zseb_16_t pack = 0; pack < num; pack++ ){
-         if ( tree[ pack ].info < ZSEB_MAX_BITS ){ // Bit length allows for increment
-            if ( rare == ZSEB_MAX_16T ){
-               rare = pack; // Assign first relevant encounter
-            } else {
-               if ( tree[ pack ].data < tree[ rare ].data ){ // smaller frequency
-                  rare = pack; // Assign even rarer encounter
+   if ( overflow > 0 ){
+
+      std::cerr << "zseb: Warning: Huffman tree bit lengths larger than allowed." << std::endl;
+
+      assert( ( overflow % 2 ) == 0 );
+
+      // Get the count for each number of bits
+      zseb_16_t bl_count[ ZSEB_MAX_BITS + 1 ];
+      for ( zseb_16_t bits = 0; bits <= ZSEB_MAX_BITS; bits++ ){ bl_count[ bits ] = 0; }
+      for ( zseb_16_t pack = 0; pack < num; pack++ ){ bl_count[ tree[ pack ].info ] += 1; } // Only leaf nodes
+
+      // Per two overflow leaf nodes, one may be paired with a new companion
+      do {
+         zseb_16_t bits = ZSEB_MAX_BITS - 1;
+         while ( bl_count[ bits ] == 0 ){ bits -= 1; }
+         bl_count[ bits ] -= 1;
+         bl_count[ bits + 1 ] += 2;
+         bl_count[ ZSEB_MAX_BITS ] -= 1; // The one to pair
+         overflow -= 2;
+      } while ( overflow > 0 );
+
+      // Assign the largest bit lengths to the smallest frequencies
+      for ( zseb_16_t pack = 0; pack < num; pack++ ){ tree[ pack ].info = 0; } // Unset bit lengths
+      for ( zseb_16_t bits = ZSEB_MAX_BITS; bits != 0; bits-- ){
+         while ( bl_count[ bits ] > 0 ){
+            zseb_16_t rare = ZSEB_MAX_16T;
+            for ( zseb_16_t sch = 0; sch < num; sch++ ){
+               if ( tree[ sch ].info == 0 ){ // bit length not yet set
+                  if ( rare == ZSEB_MAX_16T ){
+                     rare = sch; // Assign first relevant encounter
+                  } else {
+                     if ( tree[ sch ].data < tree[ rare ].data ){ // smaller frequency
+                        rare = sch; // Assign even rarer encounter
+                     }
+                  }
                }
             }
+            tree[ rare ].info = bits;
+            bl_count[ bits ] -= 1;
          }
       }
-      tree[ rare ].info += 1; // Bit length increment
-      tomove -= 1;
+
    }
 
    // Repack to stat: on output: tree[ pack < num ].{info, data} = {bit length, frequency}
