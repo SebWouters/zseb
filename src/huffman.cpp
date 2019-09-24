@@ -202,8 +202,8 @@ void zseb::huffman::calc_tree( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
    }
 
    // Retrieve the length of the non-zero CL
-   HLIT  = ZSEB_HUF_LLEN; while ( stat_llen[ HLIT  - 1 ] == 0 ){ HLIT  -= 1; }
-   HDIST = ZSEB_HUF_DIST; while ( stat_dist[ HDIST - 1 ] == 0 ){ HDIST -= 1; }
+   HLIT  = ZSEB_HUF_LLEN; while ( ( stat_llen[ HLIT  - 1 ] == 0 ) && ( HLIT  > 257 ) ){ HLIT  -= 1; }
+   HDIST = ZSEB_HUF_DIST; while ( ( stat_dist[ HDIST - 1 ] == 0 ) && ( HDIST > 1   ) ){ HDIST -= 1; }
 
    // Build tree: on output tree[ idx ].( info, data ) = bit ( length, inverse[sequence] )
    __build_tree__( stat_llen, HLIT , tree_llen, work, 'O', ZSEB_MAX_BITS_LLD );
@@ -224,7 +224,7 @@ void zseb::huffman::calc_tree( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
    const zseb_16_t num_ssq = __prefix_lengths__( stat_ssq, ZSEB_HUF_SSQ, tree_ssq, ZSEB_MAX_BITS_SSQ );
 
    // Retrieve the length of the non-zero CCL; stat_ssq in idx_sym and HCLEN in idx_pos
-   HCLEN = ZSEB_HUF_SSQ; while ( stat_ssq[ map_ssq[ HCLEN - 1 ] ] == 0 ){ HCLEN -= 1; }
+   HCLEN = ZSEB_HUF_SSQ; while ( ( stat_ssq[ map_ssq[ HCLEN - 1 ] ] == 0 ) && ( HCLEN > 4 ) ){ HCLEN -= 1; }
 
    // Dynamic Huffman tree contributions 'write_tree' function
    size_X2 += ( 5 + 5 + 4 ); // HLIT, HDIST, HCLEN
@@ -242,9 +242,9 @@ void zseb::huffman::calc_tree( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
 
 void zseb::huffman::write_tree( stream * zipfile ) const{
 
-   assert( HLIT  >= 257 ); zipfile->write( HLIT  - 257, 5 );
-   assert( HDIST >= 1 );   zipfile->write( HDIST - 1,   5 );
-   assert( HCLEN >= 4 );   zipfile->write( HCLEN - 4,   4 );
+   zipfile->write( HLIT  - 257, 5 );
+   zipfile->write( HDIST - 1,   5 );
+   zipfile->write( HCLEN - 4,   4 );
 
    for ( zseb_16_t idx_pos = 0; idx_pos < HCLEN; idx_pos++ ){
       zipfile->write( stat_ssq[ map_ssq[ idx_pos ] ], 3 ); // CCL of RLE in idx_pos
@@ -549,6 +549,8 @@ void zseb::huffman::__build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb
       zseb_16_t num = 0;
       for ( zseb_08_t nbits = 1; nbits <= ZSEB_MAX_BITS; nbits++ ){ num += bl_count[ nbits ]; }
 
+      if ( num == 0 ){ return; }
+
       const zseb_16_t num_nonzero = num;
       const zseb_16_t total       = 2 * num_nonzero - 1;
 
@@ -613,77 +615,75 @@ zseb_16_t zseb::huffman::__prefix_lengths__( zseb_16_t * stat, const zseb_16_t s
       }
    }
 
-   if ( num > 0 ){ // For very small chunks, there may be no DIST codes, for example
+   if ( num == 0 ){ return num; } // For very small chunks, there may be no DIST codes, for example
 
-      // Construct Huffman tree: after ( num - 1 ) steps of removing 2 nodes and adding 1 parent node, only the root remains
-      for ( zseb_16_t extra = 0; extra < ( num - 1 ); extra++ ){
+   // Construct Huffman tree: after ( num - 1 ) steps of removing 2 nodes and adding 1 parent node, only the root remains
+   for ( zseb_16_t extra = 0; extra < ( num - 1 ); extra++ ){
 
-         const zseb_16_t next = num + extra;
-         tree[ next ].info = ZSEB_MAX_16T; // parent not yet set
-         tree[ next ].data = 0;            // frequency
+      const zseb_16_t next = num + extra;
+      tree[ next ].info = ZSEB_MAX_16T; // parent not yet set
+      tree[ next ].data = 0;            // frequency
 
-         for ( zseb_16_t chld = 0; chld < 2; chld++ ){ // Find two children for next
-            zseb_16_t rare = ZSEB_MAX_16T;
-            for ( zseb_16_t sch = 0; sch < next; sch++ ){
-               if ( tree[ sch ].info == ZSEB_MAX_16T ){ // parent not yet set
-                  if ( rare == ZSEB_MAX_16T ){
-                     rare = sch; // Assign first relevant encounter
-                  } else {
-                     if ( tree[ sch ].data < tree[ rare ].data ){ // smaller frequency
-                        rare = sch; // Assign even rarer encounter
-                     }
-                  }
-               }
-            }
-            tree[ rare ].info          = next; // assign parent to child
-            tree[ next ].child[ chld ] = rare; // assign child to parent
-            tree[ next ].data         += tree[ rare ].data; // child frequency contributes to parent frequency
-            assert( rare != ZSEB_MAX_16T );
-         }
-      }
-
-      // Determine bit lengths --> root has none
-      const zseb_16_t root = 2 * num - 2; // Tree contains 2 * num - 1 nodes
-      tree[ root ].info = 0; // Bit length
-      for ( zseb_16_t extra = root; extra >= num; extra-- ){ // Only non-leafs
-         for ( zseb_16_t chld = 0; chld < 2; chld++ ){
-            tree[ tree[ extra ].child[ chld ] ].info = tree[ extra ].info + 1; // Bit length
-         }
-      }
-
-      // Decrement lengths > ZSEB_MAX_BITS
-      zseb_16_t tomove = 0;
-      for ( zseb_16_t pack = 0; pack < num; pack++ ){
-         if ( tree[ pack ].info > ZSEB_MAX_BITS ){ // Bit length
-            tomove += ( tree[ pack ].info - ZSEB_MAX_BITS ); // Excess bit length
-            tree[ pack ].info = ZSEB_MAX_BITS; // Bit length
-         }
-      }
-
-      // Move decrements: Least harm? Lengths < ZSEB_MAX_BITS with smallest associated frequency
-      while ( tomove > 0 ){
+      for ( zseb_16_t chld = 0; chld < 2; chld++ ){ // Find two children for next
          zseb_16_t rare = ZSEB_MAX_16T;
-         for ( zseb_16_t pack = 0; pack < num; pack++ ){
-            if ( tree[ pack ].info < ZSEB_MAX_BITS ){ // Bit length allows for increment
+         for ( zseb_16_t sch = 0; sch < next; sch++ ){
+            if ( tree[ sch ].info == ZSEB_MAX_16T ){ // parent not yet set
                if ( rare == ZSEB_MAX_16T ){
-                  rare = pack; // Assign first relevant encounter
+                  rare = sch; // Assign first relevant encounter
                } else {
-                  if ( tree[ pack ].data < tree[ rare ].data ){ // smaller frequency
-                     rare = pack; // Assign even rarer encounter
+                  if ( tree[ sch ].data < tree[ rare ].data ){ // smaller frequency
+                     rare = sch; // Assign even rarer encounter
                   }
                }
             }
          }
-         tree[ rare ].info += 1; // Bit length increment
-         tomove -= 1;
+         tree[ rare ].info          = next; // assign parent to child
+         tree[ next ].child[ chld ] = rare; // assign child to parent
+         tree[ next ].data         += tree[ rare ].data; // child frequency contributes to parent frequency
+         assert( rare != ZSEB_MAX_16T );
       }
+   }
 
-      // Repack to stat: on output: tree[ pack < num ].{info, data} = {bit length, frequency}
+   // Determine bit lengths --> root has none
+   const zseb_16_t root = 2 * num - 2; // Tree contains 2 * num - 1 nodes
+   tree[ root ].info = 0; // Bit length
+   for ( zseb_16_t extra = root; extra >= num; extra-- ){ // Only non-leafs
+      for ( zseb_16_t chld = 0; chld < 2; chld++ ){
+         tree[ tree[ extra ].child[ chld ] ].info = tree[ extra ].info + 1; // Bit length
+      }
+   }
+
+   // Decrement lengths > ZSEB_MAX_BITS
+   zseb_16_t tomove = 0;
+   for ( zseb_16_t pack = 0; pack < num; pack++ ){
+      if ( tree[ pack ].info > ZSEB_MAX_BITS ){ // Bit length
+         tomove += ( tree[ pack ].info - ZSEB_MAX_BITS ); // Excess bit length
+         tree[ pack ].info = ZSEB_MAX_BITS; // Bit length
+      }
+   }
+
+   // Move decrements: Least harm? Lengths < ZSEB_MAX_BITS with smallest associated frequency
+   while ( tomove > 0 ){
+      zseb_16_t rare = ZSEB_MAX_16T;
       for ( zseb_16_t pack = 0; pack < num; pack++ ){
-         const zseb_16_t code = tree[ pack ].child[ 0 ];
-         stat[ code ] = tree[ pack ].info; // Bit length
+         if ( tree[ pack ].info < ZSEB_MAX_BITS ){ // Bit length allows for increment
+            if ( rare == ZSEB_MAX_16T ){
+               rare = pack; // Assign first relevant encounter
+            } else {
+               if ( tree[ pack ].data < tree[ rare ].data ){ // smaller frequency
+                  rare = pack; // Assign even rarer encounter
+               }
+            }
+         }
       }
+      tree[ rare ].info += 1; // Bit length increment
+      tomove -= 1;
+   }
 
+   // Repack to stat: on output: tree[ pack < num ].{info, data} = {bit length, frequency}
+   for ( zseb_16_t pack = 0; pack < num; pack++ ){
+      const zseb_16_t code = tree[ pack ].child[ 0 ];
+      stat[ code ] = tree[ pack ].info; // Bit length
    }
 
    return num;
