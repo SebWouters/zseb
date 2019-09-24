@@ -36,5 +36,11 @@
 #define ZSEB_256_16T      ( ( zseb_16_t )( 256 ) )
 #define ZSEB_MAX_16T      65535
 
+#define ZSEB_MASK_08T     0xFFU
+#define ZSEB_MASK_16T     0xFFFFU
+#define ZSEB_MASK_32T     0xFFFFFFFFUL
+
+#define ZSEB_CHARBIT      8
+
 #endif
 

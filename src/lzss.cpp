@@ -59,6 +59,7 @@ zseb::lzss::lzss( std::string fullfile, const char modus ){
       } else {
 
          std::cerr << "zseb::lzss: Unable to open " << fullfile << "." << std::endl;
+         exit( 255 );
 
       }
    }

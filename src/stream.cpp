@@ -47,6 +47,7 @@ zseb::stream::stream( std::string filename, const char modus ){
       } else {
 
          std::cerr << "zseb::stream: Unable to open " << filename << "." << std::endl;
+         exit( 255 );
 
       }
 
@@ -90,11 +91,11 @@ void zseb::stream::write( const zseb_32_t flush, const zseb_16_t nbits ){
    data = data ^ ( flush << ibit ); // data mid
    ibit = ibit + nbits;
 
-   while ( ibit >= 8 ){
-      const char towrite = ( zseb_08_t )( data & 0xFFU ); // Mask last 8 bits
+   while ( ibit >= ZSEB_CHARBIT ){
+      const char towrite = ( zseb_08_t )( data & ZSEB_MASK_08T ); // Mask last 8 bits
       file.write( &towrite, 1 );
-      data = ( data >> 8 );
-      ibit = ibit - 8;
+      data = ( data >> ZSEB_CHARBIT );
+      ibit = ibit - ZSEB_CHARBIT;
    }
 
 }
@@ -110,10 +111,10 @@ void zseb::stream::write( const char * buffer, const zseb_32_t size_out ){
 void zseb::stream::flush(){
 
    while ( ibit > 0 ){
-      const char towrite = ( zseb_08_t )( data & 0xFFU ); // Mask last 8 bits
+      const char towrite = ( zseb_08_t )( data & ZSEB_MASK_08T ); // Mask last 8 bits
       file.write( &towrite, 1 );
-      data  = ( data >> 8 );
-      ibit  = ( ( ibit > 8 ) ? ( ibit - 8 ) : 0 );
+      data  = ( data >> ZSEB_CHARBIT );
+      ibit  = ( ( ibit > ZSEB_CHARBIT ) ? ( ibit - ZSEB_CHARBIT ) : 0 );
    }
 
 }
@@ -134,7 +135,7 @@ zseb_32_t zseb::stream::read( const zseb_16_t nbits ){
       file.read( &toread, 1 );
       const zseb_32_t toshift = ( zseb_08_t )( toread );
       data = data ^ ( toshift << ibit );
-      ibit = ibit + 8;
+      ibit = ibit + ZSEB_CHARBIT;
    }
 
    const zseb_32_t fetch = ( data & ( ( 1U << nbits ) - 1 ) ); // mask last nbits bits
@@ -166,7 +167,7 @@ zseb_32_t zseb::stream::str2int( const char * store, const zseb_16_t num ){
 
    zseb_32_t value = 0;
    for ( zseb_16_t cnt = 0; cnt < num; cnt++ ){
-      value = ( value << 8 ) ^ ( ( zseb_08_t )( store[ num - 1 - cnt ] ) );
+      value = ( value << ZSEB_CHARBIT ) ^ ( ( zseb_08_t )( store[ num - 1 - cnt ] ) );
    }
    return value;
 
@@ -176,8 +177,8 @@ void zseb::stream::int2str( const zseb_32_t value, char * store, const zseb_16_t
 
    zseb_32_t temp = value;
    for ( zseb_16_t cnt = 0; cnt < num; cnt++ ){
-      store[ cnt ] = ( zseb_08_t )( temp & 0xFFU );
-      temp = temp >> 8;
+      store[ cnt ] = ( zseb_08_t )( temp & ZSEB_MASK_08T );
+      temp = temp >> ZSEB_CHARBIT;
    }
 
 }

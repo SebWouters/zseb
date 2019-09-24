@@ -70,7 +70,7 @@ namespace zseb{
 
          void pack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size );
 
-         zseb_32_t unpack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack );
+         bool unpack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack );
 
          /***  Get sizes of fixed / dynamic trees  ***/
 

@@ -183,7 +183,7 @@ void zseb::huffman::calc_tree( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
                                                 { size_X1 += (   7                         * stat_llen[ 256 ] ); } // '7' x 1 (STOP CODON)
    for ( zseb_16_t cnt = 257; cnt < 280; cnt++ ){ size_X1 += ( ( 7 + __len_bits__( cnt ) ) * stat_llen[ cnt ] ); } // '7' x 23
    for ( zseb_16_t cnt = 280; cnt < 286; cnt++ ){ size_X1 += ( ( 8 + __len_bits__( cnt ) ) * stat_llen[ cnt ] ); } // '8' x 6 (286, 287 not encountered)
-   for ( zseb_16_t cnt = 0;   cnt < 30;  cnt++ ){ size_X1 += ( ( 5 +     bit_dist[ cnt ] ) * stat_dist[ cnt ] ); } // All dist CL 5
+   for ( zseb_16_t cnt = 0;   cnt < 30;  cnt++ ){ size_X1 += ( ( 5 +     bit_dist[ cnt ] ) * stat_dist[ cnt ] ); } // All dist CL 5 (30, 31 not encountered)
 
    // Huffman CL: input(stat) = freq; output(stat) = CL; output(tree)[ pack < num ].{info, data} = {bit length, frequency}
    const zseb_16_t num_llen = __prefix_lengths__( stat_llen, ZSEB_HUF_LLEN, tree_llen, ZSEB_MAX_BITS_LLD );
@@ -281,7 +281,7 @@ void zseb::huffman::fixed_tree( const char modus ){
 
 }
 
-zseb_32_t zseb::huffman::unpack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack ){
+bool zseb::huffman::unpack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack ){
 
    assert( wr_current == 0 );
 
@@ -324,10 +324,10 @@ zseb_32_t zseb::huffman::unpack( stream * zipfile, zseb_08_t * llen_pack, zseb_1
 
    if ( llen_code != ZSEB_LITLEN ){
       assert( wr_current == maxsize_pack );
-      return 666; // buffers not large enough
+      return true;
    }
 
-   return 0;
+   return false;
 
 }
 

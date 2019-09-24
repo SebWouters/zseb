@@ -43,7 +43,7 @@ namespace zseb{
 
          void setup_flate( std::string bigfile, const char modus );
 
-         void zip( const bool debug_test );
+         void zip();
 
          void unzip();
 

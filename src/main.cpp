@@ -125,7 +125,7 @@ int main( int argc, char ** argv ){
       zseb::zseb zipper( outfile, 'Z', print );
       zipper.write_preamble( infile );
       zipper.setup_flate( infile, 'Z' );
-      zipper.zip( false );
+      zipper.zip();
 
    }
 

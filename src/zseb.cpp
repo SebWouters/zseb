@@ -73,13 +73,6 @@ void zseb::zseb::write_preamble( std::string bigfile ){
    const zseb_32_t result = stat( bigfile.c_str(), &info );
    assert( result == 0 );
    const zseb_32_t MTIME = ( zseb_32_t )( info.st_mtime );
-   if ( print ){
-      struct tm * dt;
-      char buffer [ 30 ];
-      dt = localtime( &info.st_mtime );
-      strftime( buffer, sizeof( buffer ), "%d/%m/%y %H:%M", dt );
-      std::cout << "MTIME = " << std::string( buffer ) << std::endl;
-   }
    stream::int2str( MTIME, temp, 4 );
 
    /***  GZIP header  ***/
@@ -106,11 +99,6 @@ void zseb::zseb::write_preamble( std::string bigfile ){
    const char * buffer = stripped.c_str();
    zipfile->write( buffer, length );
    crc16 = crc32::update( crc16, buffer, length );
-   if ( print ){
-      std::cout << "FNAME = [";
-      for ( zseb_16_t cnt = 0; cnt < length; cnt++ ){ std::cout << buffer[ cnt ]; }
-      std::cout << "]" << std::endl;
-   }
    /* ZER */ var = ( zseb_08_t )( 0 );    zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
 
    // FLG.FCOMMENT --> no
@@ -146,16 +134,6 @@ std::string zseb::zseb::strip_preamble(){
    /* XFL   */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
    /* OS    */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
 
-   /***  Print MTIME  ***/
-   if ( print ){
-      struct tm * dt;
-      char buffer [ 30 ];
-      const time_t dump = ( time_t )( MTIME );
-      dt = localtime( &dump );
-      strftime( buffer, sizeof( buffer ), "%d/%m/%y %H:%M", dt );
-      std::cout << "MTIME = " << std::string( buffer ) << std::endl;
-   }
-
    if ( FEXTRA ){
       zipfile->read( temp, 2 );
       crc16 = crc32::update( crc16, temp, 2 );
@@ -175,7 +153,6 @@ std::string zseb::zseb::strip_preamble(){
          proceed = ( ( zseb_08_t )( var ) != 0 );
          if ( proceed ){ filename += var; }
       }
-      if ( print ){ std::cout << "FNAME = [" << filename << "]" << std::endl; }
    }
 
    if ( FCOMMENT ){
@@ -190,7 +167,7 @@ std::string zseb::zseb::strip_preamble(){
    if ( FHCRC ){
       zipfile->read( temp, 2 );
       const zseb_32_t checksum = stream::str2int( temp, 2 );
-      crc16 = crc16 & 0xFFFFU;
+      crc16 = crc16 & ZSEB_MASK_16T;
       if ( checksum != crc16 ){
          std::cerr << "Computed CRC16 = " << crc16 << " and read-in CRC16 = " << checksum << "." << std::endl;
          exit( 255 );
@@ -201,12 +178,12 @@ std::string zseb::zseb::strip_preamble(){
 
 }
 
-void zseb::zseb::zip( const bool debug_test ){
+void zseb::zseb::zip(){
 
    zseb_64_t size_zlib = zipfile->getpos(); // Preamble are full bytes
 
    zseb_32_t last_block = 0;
-   zseb_32_t  cnt_block = 0;
+   zseb_32_t block_form;
 
    struct timeval start, end;
    double time_lzss = 0;
@@ -229,12 +206,12 @@ void zseb::zseb::zip( const bool debug_test ){
       time_huff += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 
       // What is the minimal output?
-      const zseb_16_t block_form = ( ( debug_test ) ? ( cnt_block % 3 ) : ( ( size_X2 < size_X1 ) ? 2 : 1 ) );
+      block_form = ( ( size_X2 < size_X1 ) ? 2 : 1 );
       zipfile->write( last_block, 1 );
       zipfile->write( block_form, 2 );
 
       // Write out
-      if ( block_form == 0 ){
+      if ( block_form == 0 ){ // Never gets accessed, but verified in commit eed22d31d6b35f62e9cc4cde614aa2f0f525b395
 
          zipfile->flush();
          char vals[ 2 ];
@@ -250,10 +227,10 @@ void zseb::zseb::zip( const bool debug_test ){
       } else {
 
          gettimeofday( &start, NULL );
-         if ( block_form == 1 ){ // No need to write trees
-            coder->fixed_tree( 'O' );
-         } else {
+         if ( block_form == 2 ){
             coder->write_tree( zipfile );
+         } else {
+            coder->fixed_tree( 'O' );
          }
          coder->pack( zipfile, llen_pack, dist_pack, wr_current );
          gettimeofday( &end, NULL );
@@ -261,7 +238,6 @@ void zseb::zseb::zip( const bool debug_test ){
 
       }
 
-      cnt_block += 1;
       wr_current = 0;
 
    }
@@ -278,7 +254,7 @@ void zseb::zseb::zip( const bool debug_test ){
    stream::int2str( chcksm, temp, 4 );
    zipfile->write( temp, 4 );
    // Write ISIZE = size_file mod 2^32
-   const zseb_32_t ISIZE = ( zseb_32_t )( size_file & 0xFFFFFFFFU );
+   const zseb_32_t ISIZE = ( zseb_32_t )( size_file & ZSEB_MASK_32T );
    stream::int2str( ISIZE, temp, 4 );
    zipfile->write( temp, 4 );
 
@@ -335,9 +311,9 @@ void zseb::zseb::unzip(){
          gettimeofday( &end, NULL );
          time_huff += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 
-         zseb_32_t remain = 666;
+         bool remain = true;
 
-         while ( remain > 0 ){
+         while ( remain ){
 
             gettimeofday( &start, NULL );
             remain = coder->unpack( zipfile, llen_pack, dist_pack, wr_current, ZSEB_PACK_SIZE );
@@ -376,7 +352,7 @@ void zseb::zseb::unzip(){
    // Read ISIZE
    zipfile->read( temp, 4 );
    const zseb_32_t rd_isz = stream::str2int( temp, 4 );
-   const zseb_32_t ISIZE  = ( zseb_32_t )( size_file & 0xFFFFFFFFU );
+   const zseb_32_t ISIZE  = ( zseb_32_t )( size_file & ZSEB_MASK_32T );
    if ( ISIZE != rd_isz ){
       std::cerr << "Computed ISIZE = " << ISIZE << " and read-in ISIZE = " << rd_isz << "." << std::endl;
       exit( 255 );
