@@ -110,7 +110,7 @@ namespace zseb{
 
          static inline zseb_16_t __bit_reverse__( zseb_16_t code, const zseb_16_t nbits );
 
-         static zseb_16_t __prefix_lengths__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, const zseb_16_t ZSEB_MAX_BITS );
+         static zseb_16_t __prefix_lengths__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, bool * temp, const zseb_16_t ZSEB_MAX_BITS );
 
          static void __build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, bool * temp, const char option, const zseb_16_t ZSEB_MAX_BITS );
 

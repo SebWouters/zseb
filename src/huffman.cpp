@@ -186,8 +186,8 @@ void zseb::huffman::calc_tree( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
    for ( zseb_16_t cnt = 0;   cnt < 30;  cnt++ ){ size_X1 += ( ( 5 +     bit_dist[ cnt ] ) * stat_dist[ cnt ] ); } // All dist CL 5 (30, 31 not encountered)
 
    // Huffman CL: input(stat) = freq; output(stat) = CL; output(tree)[ pack < num ].{info, data} = {bit length, frequency}
-   const zseb_16_t num_llen = __prefix_lengths__( stat_llen, ZSEB_HUF_LLEN, tree_llen, ZSEB_MAX_BITS_LLD );
-   const zseb_16_t num_dist = __prefix_lengths__( stat_dist, ZSEB_HUF_DIST, tree_dist, ZSEB_MAX_BITS_LLD );
+   const zseb_16_t num_llen = __prefix_lengths__( stat_llen, ZSEB_HUF_LLEN, tree_llen, work, ZSEB_MAX_BITS_LLD );
+   const zseb_16_t num_dist = __prefix_lengths__( stat_dist, ZSEB_HUF_DIST, tree_dist, work, ZSEB_MAX_BITS_LLD );
 
    // Dynamic Huffman tree contributions 'pack' function
    for ( zseb_16_t cnt = 0; cnt < num_llen; cnt++ ){
@@ -221,7 +221,7 @@ void zseb::huffman::calc_tree( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
    for ( zseb_16_t count = 0; count < size_ssq; count++ ){ stat_ssq[ stat_comb[ count ] ] += 1; if ( stat_comb[ count ] >= 16 ){ count++; } }
 
    // Huffman CCL: input(stat) = freq; output(stat) = CCL; output(tree)[ pack < num ].{info, data} = {bit length, frequency}; stat_ssq in idx_sym
-   const zseb_16_t num_ssq = __prefix_lengths__( stat_ssq, ZSEB_HUF_SSQ, tree_ssq, ZSEB_MAX_BITS_SSQ );
+   const zseb_16_t num_ssq = __prefix_lengths__( stat_ssq, ZSEB_HUF_SSQ, tree_ssq, work, ZSEB_MAX_BITS_SSQ );
 
    // Retrieve the length of the non-zero CCL; stat_ssq in idx_sym and HCLEN in idx_pos
    HCLEN = ZSEB_HUF_SSQ; while ( ( stat_ssq[ map_ssq[ HCLEN - 1 ] ] == 0 ) && ( HCLEN > 4 ) ){ HCLEN -= 1; }
@@ -601,7 +601,7 @@ void zseb::huffman::__build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb
 
 }
 
-zseb_16_t zseb::huffman::__prefix_lengths__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, const zseb_16_t ZSEB_MAX_BITS ){
+zseb_16_t zseb::huffman::__prefix_lengths__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, bool * temp, const zseb_16_t ZSEB_MAX_BITS ){
 
    // Find codes with non-zero frequencies
    zseb_16_t num = 0;
@@ -637,10 +637,10 @@ zseb_16_t zseb::huffman::__prefix_lengths__( zseb_16_t * stat, const zseb_16_t s
                }
             }
          }
+         assert( rare != ZSEB_MAX_16T );
          tree[ rare ].info          = next; // assign parent to child
          tree[ next ].child[ chld ] = rare; // assign child to parent
          tree[ next ].data         += tree[ rare ].data; // child frequency contributes to parent frequency
-         assert( rare != ZSEB_MAX_16T );
       }
    }
 
@@ -702,6 +702,42 @@ zseb_16_t zseb::huffman::__prefix_lengths__( zseb_16_t * stat, const zseb_16_t s
             tree[ rare ].info = bits;
             bl_count[ bits ] -= 1;
          }
+      }
+      for ( zseb_16_t pack = 0; pack < num; pack++ ){ assert( tree[ pack ].info > 0 ); }
+
+      // Recompute tree for verification. Only very rarely overflow > 0, so no timing issue
+      const zseb_16_t total_nodes = ( 2 * num - 1 );
+      assert( root == total_nodes - 1 );
+      const zseb_16_t total_freq  = tree[ root ].data;
+      for ( zseb_16_t idx = 0; idx < total_nodes; idx++ ){ temp[ idx ] = false; }
+      zseb_16_t extra = num;
+      while ( extra < total_nodes ){
+         for ( zseb_16_t idx1 = 0; idx1 < extra; idx1++ ){
+            if ( temp[ idx1 ] == false ){
+               for ( zseb_16_t idx2 = idx1 + 1; idx2 < extra; idx2++ ){
+                  if ( temp[ idx2 ] == false ){
+                     if ( ( tree[ idx1 ].info == tree[ idx2 ].info ) ){ // Same bit length
+                        tree[ extra ].child[ 0 ] = idx1;
+                        tree[ extra ].child[ 1 ] = idx2;
+                        tree[ extra ].info = tree[ idx1 ].info - 1; // Bit length one less
+                        tree[ extra ].data = tree[ idx1 ].data + tree[ idx2 ].data; // Sum of frequencies
+                        temp[ idx1 ] = true;
+                        temp[ idx2 ] = true;
+                        extra++;
+                        idx2 = extra; // Escape inner for loop
+                     }
+                  }
+               }
+            }
+         }
+      }
+      for ( zseb_16_t idx = 0; idx < root; idx++ ){ assert( temp[ idx ] == true ); }
+
+      if ( ( tree[ root ].info != 0 ) || ( total_freq != tree[ root ].data ) ){
+         std::cerr << "zseb: Warning: Huffman tree bit lengths readjustment failed." << std::endl;
+         exit( 255 );
+      } else {
+         std::cerr << "zseb: Warning: Huffman tree bit lengths succesfully readjusted." << std::endl;
       }
 
    }
