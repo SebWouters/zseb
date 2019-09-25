@@ -615,7 +615,17 @@ zseb_16_t zseb::huffman::__prefix_lengths__( zseb_16_t * stat, const zseb_16_t s
       }
    }
 
-   if ( num == 0 ){ return num; } // For very small chunks, there may be no DIST codes, for example
+   // Set at least two frequencies non-zero to have no bogus exceptions
+   while ( num < 2 ){
+      zseb_16_t idx = 0;
+      while ( stat[ idx ] != 0 ){ idx++; }
+      stat[ idx ] = 1;
+      tree[ num ].child[ 0 ] = idx;
+      tree[ num ].child[ 1 ] = idx;
+      tree[ num ].info = ZSEB_MAX_16T; // parent not yet set
+      tree[ num ].data = stat[ idx ];  // frequency
+      num += 1;
+   }
 
    // Construct Huffman tree: after ( num - 1 ) steps of removing 2 nodes and adding 1 parent node, only the root remains
    for ( zseb_16_t extra = 0; extra < ( num - 1 ); extra++ ){
