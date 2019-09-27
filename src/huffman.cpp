@@ -169,7 +169,7 @@ void zseb::huffman::calc_tree( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
 
    // Gather statistics
    for ( zseb_32_t count = 0; count < size; count++ ){
-      if ( dist_pack[ count ] == ZSEB_MAX_16T ){
+      if ( dist_pack[ count ] == ZSEB_MASK_16T ){
          stat_llen[ llen_pack[ count ] ] += 1; // lit_code == lit
       } else {
          stat_llen[  __len_code__( llen_pack[ count ] ) ] += 1;
@@ -295,7 +295,7 @@ bool zseb::huffman::unpack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t *
       if ( llen_code < ZSEB_LITLEN ){ // unpack literal
 
          llen_pack[ wr_current ] = llen_code;
-         dist_pack[ wr_current ] = ZSEB_MAX_16T;
+         dist_pack[ wr_current ] = ZSEB_MASK_16T;
          wr_current += 1;
 
       }
@@ -334,7 +334,7 @@ bool zseb::huffman::unpack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t *
 void zseb::huffman::pack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size ){
 
    for ( zseb_32_t idx = 0; idx < size; idx++ ){
-      if ( dist_pack[ idx ] == ZSEB_MAX_16T ){
+      if ( dist_pack[ idx ] == ZSEB_MASK_16T ){
          const zseb_16_t lit_code = llen_pack[ idx ];
          zipfile->write( tree_llen[ lit_code ].data, tree_llen[ lit_code ].info ); // Literal
       } else {
@@ -609,7 +609,7 @@ zseb_16_t zseb::huffman::__prefix_lengths__( zseb_16_t * stat, const zseb_16_t s
       if ( stat[ idx ] != 0 ){
          tree[ num ].child[ 0 ] = idx;
          tree[ num ].child[ 1 ] = idx;
-         tree[ num ].info = ZSEB_MAX_16T; // parent not yet set
+         tree[ num ].info = ZSEB_MASK_16T; // parent not yet set
          tree[ num ].data = stat[ idx ];  // frequency
          num += 1;
       }
@@ -622,7 +622,7 @@ zseb_16_t zseb::huffman::__prefix_lengths__( zseb_16_t * stat, const zseb_16_t s
       stat[ idx ] = 1;
       tree[ num ].child[ 0 ] = idx;
       tree[ num ].child[ 1 ] = idx;
-      tree[ num ].info = ZSEB_MAX_16T; // parent not yet set
+      tree[ num ].info = ZSEB_MASK_16T; // parent not yet set
       tree[ num ].data = stat[ idx ];  // frequency
       num += 1;
    }
@@ -631,14 +631,14 @@ zseb_16_t zseb::huffman::__prefix_lengths__( zseb_16_t * stat, const zseb_16_t s
    for ( zseb_16_t extra = 0; extra < ( num - 1 ); extra++ ){
 
       const zseb_16_t next = num + extra;
-      tree[ next ].info = ZSEB_MAX_16T; // parent not yet set
+      tree[ next ].info = ZSEB_MASK_16T; // parent not yet set
       tree[ next ].data = 0;            // frequency
 
       for ( zseb_16_t chld = 0; chld < 2; chld++ ){ // Find two children for next
-         zseb_16_t rare = ZSEB_MAX_16T;
+         zseb_16_t rare = ZSEB_MASK_16T;
          for ( zseb_16_t sch = 0; sch < next; sch++ ){
-            if ( tree[ sch ].info == ZSEB_MAX_16T ){ // parent not yet set
-               if ( rare == ZSEB_MAX_16T ){
+            if ( tree[ sch ].info == ZSEB_MASK_16T ){ // parent not yet set
+               if ( rare == ZSEB_MASK_16T ){
                   rare = sch; // Assign first relevant encounter
                } else {
                   if ( tree[ sch ].data < tree[ rare ].data ){ // smaller frequency
@@ -647,7 +647,7 @@ zseb_16_t zseb::huffman::__prefix_lengths__( zseb_16_t * stat, const zseb_16_t s
                }
             }
          }
-         assert( rare != ZSEB_MAX_16T );
+         assert( rare != ZSEB_MASK_16T );
          tree[ rare ].info          = next; // assign parent to child
          tree[ next ].child[ chld ] = rare; // assign child to parent
          tree[ next ].data         += tree[ rare ].data; // child frequency contributes to parent frequency
@@ -697,10 +697,10 @@ zseb_16_t zseb::huffman::__prefix_lengths__( zseb_16_t * stat, const zseb_16_t s
       for ( zseb_16_t pack = 0; pack < num; pack++ ){ tree[ pack ].info = 0; } // Unset bit lengths
       for ( zseb_16_t bits = ZSEB_MAX_BITS; bits != 0; bits-- ){
          while ( bl_count[ bits ] > 0 ){
-            zseb_16_t rare = ZSEB_MAX_16T;
+            zseb_16_t rare = ZSEB_MASK_16T;
             for ( zseb_16_t sch = 0; sch < num; sch++ ){
                if ( tree[ sch ].info == 0 ){ // bit length not yet set
-                  if ( rare == ZSEB_MAX_16T ){
+                  if ( rare == ZSEB_MASK_16T ){
                      rare = sch; // Assign first relevant encounter
                   } else {
                      if ( tree[ sch ].data < tree[ rare ].data ){ // smaller frequency

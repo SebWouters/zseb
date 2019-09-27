@@ -22,9 +22,9 @@
 
 #include "dtypes.h"
 
-#define ZSEB_CRC32_REVERSE  0xEDB88320UL
+#define ZSEB_CRC32_REVERSE  0xedb88320UL
 #define ZSEB_CRC32_BITFLIP  ( ZSEB_MASK_32T )
-#define ZSEB_CRC32_TABLE    256
+#define ZSEB_CRC32_TABLE    ( 1U << ZSEB_CHARBIT )
 #define ZSEB_CRC32_MASK     ( ZSEB_MASK_08T )
 
 namespace zseb{

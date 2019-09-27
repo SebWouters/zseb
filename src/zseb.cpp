@@ -90,8 +90,8 @@ void zseb::zseb::write_preamble( std::string bigfile ){
    stream::int2str( mtime, temp, 4 );
 
    /***  GZIP header  ***/
-   /* ID1 */ var = ( zseb_08_t )( 0x1F ); zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
-   /* ID2 */ var = ( zseb_08_t )( 0x8B ); zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
+   /* ID1 */ var = ( zseb_08_t )( 0x1f ); zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
+   /* ID2 */ var = ( zseb_08_t )( 0x8b ); zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
    /* CM  */ var = ( zseb_08_t )( 8 );    zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
    /* FLG */ var = ( zseb_08_t )( 10 );   zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); // (0, 0, 0, FCOMMENT=0, FNAME=1, FEXTRA=0, FHCRC=1, FTEXT=0 )
    /* MTIME */                            zipfile->write( temp, 4 ); crc16 = crc32::update( crc16, temp, 4 );
@@ -132,8 +132,8 @@ std::string zseb::zseb::strip_preamble(){
    char temp[ 4 ];
 
    /***  GZIP header  ***/
-   /* ID1 */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); if ( ( zseb_08_t )( var ) != 0x1F ){ std::cerr << "zseb: Incompatible ID1." << std::endl; exit( 255 ); }
-   /* ID2 */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); if ( ( zseb_08_t )( var ) != 0x8B ){ std::cerr << "zseb: Incompatible ID2." << std::endl; exit( 255 ); }
+   /* ID1 */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); if ( ( zseb_08_t )( var ) != 0x1f ){ std::cerr << "zseb: Incompatible ID1." << std::endl; exit( 255 ); }
+   /* ID2 */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); if ( ( zseb_08_t )( var ) != 0x8b ){ std::cerr << "zseb: Incompatible ID2." << std::endl; exit( 255 ); }
    /* CM  */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); if ( ( zseb_08_t )( var ) != 8    ){ std::cerr << "zseb: Incompatible CM."  << std::endl; exit( 255 ); }
    /* FLG */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); const zseb_08_t FLG = ( zseb_08_t )( var );
    if ( ( ( FLG >> 7 ) & 1U ) == 1U ){ std::cerr << "zseb: Reserved bit is non-zero." << std::endl; exit( 255 ); }

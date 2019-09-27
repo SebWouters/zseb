@@ -26,25 +26,18 @@ zseb::stream::stream( std::string filename, const char modus ){
 
    data = 0;
    ibit = 0;
-   size = 0;
-   mode = modus;
 
-   if ( mode == 'W' ){
+   if ( modus == 'W' ){
 
       file.open( filename.c_str(), std::ios::out|std::ios::binary|std::ios::trunc );
 
    }
 
-   if ( mode == 'R' ){
+   if ( modus == 'R' ){
 
-      file.open( filename.c_str(), std::ios::in|std::ios::binary|std::ios::ate );
+      file.open( filename.c_str(), std::ios::in|std::ios::binary );
 
-      if ( file.is_open() ){
-
-         size = ( zseb_64_t )( file.tellg() );
-         file.seekg( 0, std::ios::beg );
-
-      } else {
+      if ( false == file.is_open() ){
 
          std::cerr << "zseb: Unable to open " << filename << "." << std::endl;
          exit( 255 );
@@ -57,15 +50,7 @@ zseb::stream::stream( std::string filename, const char modus ){
 
 zseb::stream::~stream(){
 
-   if ( mode == 'W' ){ if ( ibit > 0 ){ flush(); } }
    if ( file.is_open() ){ file.close(); }
-
-}
-
-zseb_64_t zseb::stream::getsize() const{
-
-   assert( mode == 'R' );
-   return size;
 
 }
 

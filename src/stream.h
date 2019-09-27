@@ -58,21 +58,15 @@ namespace zseb{
 
          /***  FILE SIZE INFO  ***/
 
-         zseb_64_t getsize() const; // Only relevant on 'R'
-
          zseb_64_t getpos();
 
       private:
 
          std::fstream file;
 
-         char mode;      // 'R' or 'W'
-
          zseb_32_t data; // Not yet completed byte
 
          zseb_16_t ibit; // Number of bits in not yet completed byte
-
-         zseb_64_t size; // File size variable
 
    };
 

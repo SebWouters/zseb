@@ -37,6 +37,9 @@
 #define ZSEB_HASH_MASK    ( ZSEB_HASH_SIZE - 1 )
 #define ZSEB_HASH_STOP    0
 
+#define ZSEB_MAX_CHAIN    4096
+#define ZSEB_GOOD_MATCH   32
+
 namespace zseb{
 
    class lzss{
@@ -95,15 +98,17 @@ namespace zseb{
          zseb_64_t * hash_head; // hash_head['abc'] = hash_head[ c + 256 * ( b + 256 * a ) ] = file idx of latest encounter; file idx == 0 == ZSEB_HASH_STOP
 
          zseb_64_t * hash_prv3; // hash_prv3[ idx ] = idx' = file idx of encounter before idx with same 3 chars ( length ZSEB_HIST_SIZE )
-
+#ifndef ZSEB_GZIP_BEST
          zseb_64_t * hash_prv4; // hash_prv4[ idx ] = idx' = file idx of encounter before idx with same 4 chars ( length ZSEB_HIST_SIZE )
-
+#endif
          /***  Functions  ***/
 
          void __readin__();
-
+#ifndef ZSEB_GZIP_BEST
          void __longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len, zseb_64_t ptr, const zseb_32_t curr ) const;
-
+#else
+         void __longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len, zseb_64_t ptr, const zseb_32_t curr, zseb_16_t chain_length ) const;
+#endif
          inline void __move_hash__( const zseb_32_t hash_entry ); // Add hash_entry & rd_current to hash; increment rd_current
 
          inline void __append_lit_encode__( zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current );
