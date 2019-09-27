@@ -313,11 +313,10 @@ void zseb::lzss::__longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len
    char * start  = frame + curr + 3;
    char * cutoff = frame + curr + max_len;
 
-   while ( ( ptr > lim ) && ( result_len < ZSEB_LENGTH_MAX ) ){
+   while ( ptr > lim ){
 
       char * current = start;
       char * history = start + ( ptr - rd_shift ) - curr;
-      //char * cutoff  = frame + curr + max_len; // Can be placed outside of loop
 
       do {} while( ( *(history++) == *(current++) ) &&
                    ( *(history++) == *(current++) ) &&
@@ -325,13 +324,14 @@ void zseb::lzss::__longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len
                    ( *(history++) == *(current++) ) && ( current < cutoff ) ); // ZSEB_FRAME is a full 1024 larger than ZSEB_TRIGGER
 
       zseb_16_t length = ( zseb_16_t )( ( ( current >= cutoff ) ? cutoff : current ) - ( frame + curr + 1 ) );
-      if ( current >= cutoff ){
+      if ( current >= cutoff ){ // If last equality check fails upon which current becomes cutoff -> former is OK
          if ( *( frame + ( ptr - rd_shift ) + length ) == *( frame + curr + length ) ){ length += 1; }
       }
 
       if ( length > result_len ){
          result_len = length;
          result_ptr = ptr;
+         if ( result_len >= ZSEB_LENGTH_MAX ){ break; }
       }
 
       if ( hash_sch == hash_prv3 ){ // If still on hash_prv3 chain

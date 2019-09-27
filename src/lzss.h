@@ -28,14 +28,14 @@
 #include "stream.h"
 
      // ZSEB_HIST_SIZE    32768U                          // 2^15 ( data format, defined in dtypes )
-#define ZSEB_HIST_MASK    ( ZSEB_HIST_SIZE - 1 )
+#define ZSEB_HIST_MASK    ( ZSEB_HIST_SIZE - 1U )
 #define ZSEB_SHIFT        ( ZSEB_HIST_SIZE )              // Integer multiple of ZSEB_HIST_SIZE: ( ZSEB_SHIFT & ZSEB_HIST_MASK ) == 0
 #define ZSEB_TRIGGER      ( ZSEB_HIST_SIZE + ZSEB_SHIFT ) // If ( rd_current >= ZSEB_TRIGGER ) --> shift
 #define ZSEB_FRAME        ( ZSEB_TRIGGER + 1024U )        // Important that 1024 > max( length ) = 258 !!!
 
 #define ZSEB_HASH_SIZE    16777216U  // ZSEB_LITLEN^3 = 2^24
-#define ZSEB_HASH_MASK    ( ZSEB_HASH_SIZE - 1 )
-#define ZSEB_HASH_STOP    0
+#define ZSEB_HASH_MASK    ( ZSEB_HASH_SIZE - 1U )
+#define ZSEB_HASH_STOP    0U
 
 namespace zseb{
 
