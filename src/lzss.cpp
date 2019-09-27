@@ -309,6 +309,8 @@ void zseb::lzss::__longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len
 
    hash_prv4[ form4 & ZSEB_HIST_MASK ] = ZSEB_HASH_STOP; // Update accounted for
 
+   const zseb_16_t max_len = ( ( ZSEB_LENGTH_MAX > ( rd_end - curr ) ) ? ( rd_end - curr ) : ZSEB_LENGTH_MAX );
+
    while ( ( ptr > lim ) && ( result_len < ZSEB_LENGTH_MAX ) ){
 
       zseb_32_t rd_his = ( zseb_32_t )( ptr - rd_shift ) + ini_len;
@@ -328,7 +330,7 @@ void zseb::lzss::__longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len
 
       char * current = frame + curr + ini_len;
       char * history = frame + ( ptr - rd_shift ) + ini_len;
-      char * cutoff  = frame + ( ( ( curr + ZSEB_LENGTH_MAX ) > rd_end ) ? rd_end : ( curr + ZSEB_LENGTH_MAX ) );
+      char * cutoff  = frame + curr + max_len;
       //zseb_16_t n_loops = ( rd_lim - rd_pos ) / 4; // Typically ( ZSEB_LENGTH_MAX - ini_len ) / 4 = ( 258 - ( 3 or 4 ) ) / 4 = 63
       //zseb_16_t n_extra = ( rd_lim - rd_pos ) % 4; // Typically 2 or 3 
 
@@ -339,16 +341,23 @@ void zseb::lzss::__longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len
                    ( *(history++) == *(current++) ) &&
                    ( *(history++) == *(current++) ) && ( current < cutoff ) ); // ZSEB_FRAME is a full 1024 larger than ZSEB_TRIGGER
 
-      zseb_16_t length2 = ( zseb_16_t )( current - ( frame + curr + 1 ) );
-      length2 = ( ( length2 > ZSEB_LENGTH_MAX ) ? ZSEB_LENGTH_MAX : length2 );
-
+      zseb_16_t length2;
+      if ( current >= cutoff ){
+         length2 = cutoff - ( frame + curr + 1 );
+         if ( *( frame + ( ptr - rd_shift ) + length2 ) == *( frame + curr + length2 ) ){ length2 += 1; }
+      } else {
+         length2 = current - ( frame + curr + 1 );
+      }
 
       const zseb_16_t length = ( zseb_16_t )( rd_pos - curr );
 
-      if ( length != length2 ){ std::cerr << "zseb: longest_match: ERROR" << std::endl; }
-
-//      std::cout << "length  = " << length  << std::endl;
-//      std::cout << "length2 = " << length2 << std::endl;
+      if ( length != length2 ){
+         std::cout << "max_len = " << max_len << std::endl;
+         std::cout << "length  = " << length  << std::endl;
+         std::cout << "length2 = " << length2 << std::endl;
+         std::cerr << "zseb: longest_match: ERROR" << std::endl;
+         exit( 255 );
+      }
 
       if ( length > result_len ){
          result_len = length;
