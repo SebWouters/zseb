@@ -34,9 +34,7 @@ zseb::lzss::lzss( std::string fullfile, const char modus ){
    frame     = NULL;
    hash_head = NULL;
    hash_prv3 = NULL;
-#ifndef ZSEB_GZIP_BEST
    hash_prv4 = NULL;
-#endif
 
    if ( modus == 'Z' ){
 
@@ -51,14 +49,10 @@ zseb::lzss::lzss( std::string fullfile, const char modus ){
 
          hash_head = new zseb_64_t[ ZSEB_HASH_SIZE ];
          hash_prv3 = new zseb_64_t[ ZSEB_HIST_SIZE ];
-#ifndef ZSEB_GZIP_BEST
          hash_prv4 = new zseb_64_t[ ZSEB_HIST_SIZE ];
-#endif
          for ( zseb_32_t cnt = 0; cnt < ZSEB_HASH_SIZE; cnt++ ){ hash_head[ cnt ] = ZSEB_HASH_STOP; }
          for ( zseb_32_t cnt = 0; cnt < ZSEB_HIST_SIZE; cnt++ ){ hash_prv3[ cnt ] = ZSEB_HASH_STOP; }
-#ifndef ZSEB_GZIP_BEST
          for ( zseb_32_t cnt = 0; cnt < ZSEB_HIST_SIZE; cnt++ ){ hash_prv4[ cnt ] = ZSEB_HASH_STOP; }
-#endif
 
          __readin__(); // Get ready for work
 
@@ -86,9 +80,7 @@ zseb::lzss::~lzss(){
    if ( frame     != NULL ){ delete [] frame;     }
    if ( hash_head != NULL ){ delete [] hash_head; }
    if ( hash_prv3 != NULL ){ delete [] hash_prv3; }
-#ifndef ZSEB_GZIP_BEST
    if ( hash_prv4 != NULL ){ delete [] hash_prv4; }
-#endif
 
 }
 
@@ -225,14 +217,8 @@ zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
          longest_ptr0 = longest_ptr1;
          longest_len0 = longest_len1;
       } else {
-#ifndef ZSEB_GZIP_BEST // Do Morphing Match Chain
       __longest_match__( longest_ptr0, longest_len0, hash_head[ hash_entry ], rd_current     ); }
       __longest_match__( longest_ptr1, longest_len1, hash_head[ next_entry ], rd_current + 1 );
-#else // Do GZIP --best
-      __longest_match__( longest_ptr0, longest_len0, hash_head[ hash_entry ], rd_current    , ZSEB_MAX_CHAIN ); }
-      __longest_match__( longest_ptr1, longest_len1, hash_head[ next_entry ], rd_current + 1, ( ( longest_len0 >= ZSEB_GOOD_MATCH ) ? ( ZSEB_MAX_CHAIN >> 2 ) : ZSEB_MAX_CHAIN ) );
-#endif
-
 
       if ( ( longest_ptr0 == ZSEB_HASH_STOP ) || ( longest_len1 > longest_len0 ) ){ // lazy evaluation
          __append_lit_encode__( llen_pack, dist_pack, wr_current );
@@ -248,9 +234,7 @@ zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
       hash_entry = next_entry;
       for ( zseb_16_t cnt = 1; cnt < longest_len0; cnt++ ){
          __move_hash__( hash_entry );
-#ifndef ZSEB_GZIP_BEST
          if ( cnt >= 2 ){ hash_prv4[ rd_current & ZSEB_HIST_MASK ] = ZSEB_HASH_STOP; } // ( rd_shift & ZSEB_HIST_MASK ) == 0
-#endif
          hash_entry = ( ( zseb_08_t )( frame[ rd_current + 2 ] ) ) | ( ( hash_entry << ZSEB_LITLEN_BIT ) & ZSEB_HASH_MASK );
       }
 
@@ -311,11 +295,7 @@ void zseb::lzss::__move_hash__( const zseb_32_t hash_entry ){
 
 }
 
-#ifndef ZSEB_GZIP_BEST // Do Morphing Match Chain
 void zseb::lzss::__longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len, zseb_64_t ptr, const zseb_32_t curr ) const{
-#else // Do GZIP --best
-void zseb::lzss::__longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len, zseb_64_t ptr, const zseb_32_t curr, zseb_16_t chain_length ) const{
-#endif
 
    zseb_64_t form4 = rd_shift + curr; // pos = rd_shift + curr
    const zseb_64_t lim = ( ( form4 > ZSEB_HIST_SIZE ) ? ( form4 - ZSEB_HIST_SIZE ) : 0 );
@@ -326,13 +306,9 @@ void zseb::lzss::__longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len
    zseb_64_t * hash_sch = hash_prv3;
    zseb_16_t ini_len    = 3;
 
-#ifndef ZSEB_GZIP_BEST  // Do Morphing Match Chain
    hash_prv4[ form4 & ZSEB_HIST_MASK ] = ZSEB_HASH_STOP; // Update accounted for
 
    while ( ( ptr > lim ) && ( result_len < ZSEB_LENGTH_MAX ) ){
-#else // Do GZIP --best
-   while ( ( ptr > lim ) && ( result_len < ZSEB_LENGTH_MAX ) && ( chain_length-- > 0 ) ){
-#endif
 
       zseb_32_t rd_his = ptr - rd_shift + ini_len;
       zseb_32_t rd_pos = curr + ini_len;
@@ -351,7 +327,6 @@ void zseb::lzss::__longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len
 
       const zseb_16_t length = ( zseb_16_t )( rd_pos - curr );
 
-#ifndef ZSEB_GZIP_BEST // Do Morphing Match Chain
       if ( ini_len == 3 ){ // If still on hash_prv3 chain
          if ( length >= 4 ){ // If relevant retrieval
             // Update hash_prv4
@@ -364,7 +339,6 @@ void zseb::lzss::__longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len
             }
          }
       }
-#endif
 
       if ( length > result_len ){
          result_len = length;

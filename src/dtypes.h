@@ -41,7 +41,5 @@
 
 #define ZSEB_CHARBIT      8
 
-//#define ZSEB_GZIP_BEST
-
 #endif
 
