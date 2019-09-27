@@ -305,58 +305,28 @@ void zseb::lzss::__longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len
    result_len = 1;
 
    zseb_64_t * hash_sch = hash_prv3;
-   zseb_16_t ini_len    = 3;
 
    hash_prv4[ form4 & ZSEB_HIST_MASK ] = ZSEB_HASH_STOP; // Update accounted for
 
    const zseb_16_t max_len = ( ( ZSEB_LENGTH_MAX > ( rd_end - curr ) ) ? ( rd_end - curr ) : ZSEB_LENGTH_MAX );
 
+   char * start  = frame + curr + 3;
+   char * cutoff = frame + curr + max_len;
+
    while ( ( ptr > lim ) && ( result_len < ZSEB_LENGTH_MAX ) ){
 
-      zseb_32_t rd_his = ( zseb_32_t )( ptr - rd_shift ) + ini_len;
-      zseb_32_t rd_pos = curr + ini_len;
-      zseb_32_t rd_lim = ( ( ( curr + ZSEB_LENGTH_MAX ) > rd_end ) ? rd_end : ( curr + ZSEB_LENGTH_MAX ) );
-
-      bool match = true;
-      while ( ( rd_pos < rd_lim ) && ( match ) ){
-         if ( frame[ rd_his ] == frame[ rd_pos ] ){
-            rd_his++;
-            rd_pos++;
-         } else {
-            match = false;
-         }
-      }
-      // TODO: Check https://git.savannah.gnu.org/cgit/gzip.git/tree/deflate.c#n468
-
-      char * current = frame + curr + ini_len;
-      char * history = frame + ( ptr - rd_shift ) + ini_len;
-      char * cutoff  = frame + curr + max_len;
-      //zseb_16_t n_loops = ( rd_lim - rd_pos ) / 4; // Typically ( ZSEB_LENGTH_MAX - ini_len ) / 4 = ( 258 - ( 3 or 4 ) ) / 4 = 63
-      //zseb_16_t n_extra = ( rd_lim - rd_pos ) % 4; // Typically 2 or 3 
-
-      //char * cutoff2 = current + 4 * n_loops;
+      char * current = start;
+      char * history = start + ( ptr - rd_shift ) - curr;
+      //char * cutoff  = frame + curr + max_len; // Can be placed outside of loop
 
       do {} while( ( *(history++) == *(current++) ) &&
                    ( *(history++) == *(current++) ) &&
                    ( *(history++) == *(current++) ) &&
                    ( *(history++) == *(current++) ) && ( current < cutoff ) ); // ZSEB_FRAME is a full 1024 larger than ZSEB_TRIGGER
 
-      zseb_16_t length2;
+      zseb_16_t length = ( zseb_16_t )( ( ( current >= cutoff ) ? cutoff : current ) - ( frame + curr + 1 ) );
       if ( current >= cutoff ){
-         length2 = cutoff - ( frame + curr + 1 );
-         if ( *( frame + ( ptr - rd_shift ) + length2 ) == *( frame + curr + length2 ) ){ length2 += 1; }
-      } else {
-         length2 = current - ( frame + curr + 1 );
-      }
-
-      const zseb_16_t length = ( zseb_16_t )( rd_pos - curr );
-
-      if ( length != length2 ){
-         std::cout << "max_len = " << max_len << std::endl;
-         std::cout << "length  = " << length  << std::endl;
-         std::cout << "length2 = " << length2 << std::endl;
-         std::cerr << "zseb: longest_match: ERROR" << std::endl;
-         exit( 255 );
+         if ( *( frame + ( ptr - rd_shift ) + length ) == *( frame + curr + length ) ){ length += 1; }
       }
 
       if ( length > result_len ){
@@ -364,14 +334,14 @@ void zseb::lzss::__longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len
          result_ptr = ptr;
       }
 
-      if ( ini_len == 3 ){ // If still on hash_prv3 chain
+      if ( hash_sch == hash_prv3 ){ // If still on hash_prv3 chain
          if ( length >= 4 ){ // If relevant retrieval
             // Update hash_prv4
             hash_prv4[ form4 & ZSEB_HIST_MASK ] = ptr;
             form4 = ptr;
             if ( hash_prv4[ ptr & ZSEB_HIST_MASK ] != ZSEB_HASH_STOP ){
                // If present retrieval picks up trace along hash_prev4 chain, switch chains and quit updating
-               ini_len = 4;
+               start += 1;
                hash_sch = hash_prv4;
             }
          }
