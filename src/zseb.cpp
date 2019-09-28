@@ -225,32 +225,15 @@ void zseb::zseb::zip(){
       zipfile->write( block_form, 2 );
 
       // Write out
-      if ( block_form == 0 ){ // Never gets accessed, but verified in commit eed22d31d6b35f62e9cc4cde614aa2f0f525b395
-
-         zipfile->flush();
-         char vals[ 2 ];
-         const zseb_16_t  LEN = ( zseb_16_t )( flate->get_LEN() );
-         const zseb_16_t NLEN = ( ~LEN );
-         stream::int2str(  LEN, vals, 2 ); zipfile->write( vals, 2 );
-         stream::int2str( NLEN, vals, 2 ); zipfile->write( vals, 2 );
-         gettimeofday( &start, NULL );
-         flate->uncompressed( zipfile );
-         gettimeofday( &end, NULL );
-         time_lzss += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
-
+      gettimeofday( &start, NULL );
+      if ( block_form == 2 ){
+         coder->write_tree( zipfile );
       } else {
-
-         gettimeofday( &start, NULL );
-         if ( block_form == 2 ){
-            coder->write_tree( zipfile );
-         } else {
-            coder->fixed_tree( 'O' );
-         }
-         coder->pack( zipfile, llen_pack, dist_pack, wr_current );
-         gettimeofday( &end, NULL );
-         time_huff += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
-
+         coder->fixed_tree( 'O' );
       }
+      coder->pack( zipfile, llen_pack, dist_pack, wr_current );
+      gettimeofday( &end, NULL );
+      time_huff += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 
       wr_current = 0;
 

@@ -27,19 +27,17 @@
 
 #define ZSEB_HIST_SIZE    32768U     // 2^15
 #define ZSEB_HIST_BIT     15
-#define ZSEB_LITLEN       256U       // 2^8; there is an alphabet of 256 literals / len_shifts
-#define ZSEB_LITLEN_BIT   8
+#define ZSEB_CHARBIT      8
+#define ZSEB_LITLEN       ( 1U << ZSEB_CHARBIT )
 #define ZSEB_LENGTH_SHIFT 3          // length = ZSEB_LENGTH_SHIFT + len_shift
 #define ZSEB_LENGTH_MAX   258U
 #define ZSEB_DIST_SHIFT   1          // distance = ZSEB_DIST_SHIFT + dist_shift
 
-#define ZSEB_256_16T      ( ( zseb_16_t )( 256 ) )
+#define ZSEB_256_16T      ( ( zseb_16_t )( 256U ) )
 
 #define ZSEB_MASK_08T     0xffU
 #define ZSEB_MASK_16T     0xffffU
 #define ZSEB_MASK_32T     0xffffffffUL
-
-#define ZSEB_CHARBIT      8
 
 #endif
 
