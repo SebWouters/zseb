@@ -36,6 +36,10 @@
 #define ZSEB_HASH_MASK    ( ZSEB_HASH_SIZE - 1U )
 #define ZSEB_HASH_STOP    0U
 
+#define ZSEB_GZIP_BEST
+#define ZSEB_MAX_CHAIN    4096
+#define ZSEB_GOOD_MATCH   32
+
 namespace zseb{
 
    class lzss{
@@ -93,7 +97,11 @@ namespace zseb{
 
          void __readin__();
 
-         void __longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len, zseb_32_t ptr, const zseb_32_t curr ) const;
+#ifndef ZSEB_GZIP_BEST
+         void __longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len, zseb_32_t ptr, const zseb_32_t curr );
+#else
+         void __longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len, zseb_32_t ptr, const zseb_32_t curr, zseb_16_t chain_length );
+#endif
 
          inline void __move_hash__( const zseb_32_t hash_entry ); // Add hash_entry & rd_current to hash; increment rd_current
 

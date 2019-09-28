@@ -214,9 +214,18 @@ zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
          longest_len0 = longest_len1;
       } else {
       longest_ptr0 = ( ( hash_head[ hash_entry ] > rd_shift ) ? ( zseb_32_t )( hash_head[ hash_entry ] - rd_shift ) : 0U );
-      __longest_match__( longest_ptr0, longest_len0, longest_ptr0, rd_current     ); }
+#ifndef ZSEB_GZIP_BEST
+      __longest_match__( longest_ptr0, longest_len0, longest_ptr0, rd_current ); }
+#else
+      __longest_match__( longest_ptr0, longest_len0, longest_ptr0, rd_current, ZSEB_MAX_CHAIN ); }
+#endif
       longest_ptr1 = ( ( hash_head[ next_entry ] > rd_shift ) ? ( zseb_32_t )( hash_head[ next_entry ] - rd_shift ) : 0U );
+#ifndef ZSEB_GZIP_BEST
       __longest_match__( longest_ptr1, longest_len1, longest_ptr1, rd_current + 1 );
+#else
+      __longest_match__( longest_ptr1, longest_len1, longest_ptr1, rd_current + 1, ( ( longest_len0 >= ZSEB_GOOD_MATCH ) ? ( ZSEB_MAX_CHAIN >> 2 ) : ZSEB_MAX_CHAIN ) );
+#endif
+      
 
       if ( ( longest_ptr0 == ZSEB_HASH_STOP ) || ( longest_len1 > longest_len0 ) ){ // lazy evaluation
          __append_lit_encode__( llen_pack, dist_pack, wr_current );
@@ -290,7 +299,11 @@ void zseb::lzss::__move_hash__( const zseb_32_t hash_entry ){
 
 }
 
-void zseb::lzss::__longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len, zseb_32_t ptr, const zseb_32_t curr ) const{
+#ifndef ZSEB_GZIP_BEST
+void zseb::lzss::__longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len, zseb_32_t ptr, const zseb_32_t curr ){
+#else
+void zseb::lzss::__longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len, zseb_32_t ptr, const zseb_32_t curr, zseb_16_t chain_length ){
+#endif
 
    const zseb_32_t lim = ( ( curr > ZSEB_HIST_SIZE ) ? ( curr - ZSEB_HIST_SIZE ) : 0 );
 
@@ -299,16 +312,21 @@ void zseb::lzss::__longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len
 
    zseb_32_t * hash_sch = hash_prv3;
 
+#ifndef ZSEB_GZIP_BEST
    zseb_32_t form4 = ( curr & ZSEB_HIST_MASK );
    hash_prv4[ form4 ] = ZSEB_HASH_STOP; // Update accounted for
+#endif
 
    const zseb_16_t max_len = ( ( ZSEB_LENGTH_MAX > ( rd_end - curr ) ) ? ( rd_end - curr ) : ZSEB_LENGTH_MAX );
 
    char * start  = frame + curr + 2;
    char * cutoff = frame + curr + max_len;
 
+#ifndef ZSEB_GZIP_BEST
    while ( ptr > lim ){
-
+#else
+   while ( ( ptr > lim ) && ( chain_length != 0 ) ){
+#endif
       char * current = start;
       char * history = ( start + ptr ) - curr;
 
@@ -326,6 +344,7 @@ void zseb::lzss::__longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len
          if ( result_len >= ZSEB_LENGTH_MAX ){ break; }
       }
 
+#ifndef ZSEB_GZIP_BEST
       if ( hash_sch == hash_prv3 ){ // If still on hash_prv3 chain
          if ( length >= 4 ){ // If relevant retrieval
             // Update hash_prv4
@@ -338,6 +357,9 @@ void zseb::lzss::__longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len
             }
          }
       }
+#else
+      chain_length -= 1;
+#endif
 
       ptr = hash_sch[ ptr & ZSEB_HIST_MASK ];
 
