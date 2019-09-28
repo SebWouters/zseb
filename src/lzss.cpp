@@ -310,7 +310,7 @@ void zseb::lzss::__longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len
 
    const zseb_16_t max_len = ( ( ZSEB_LENGTH_MAX > ( rd_end - curr ) ) ? ( rd_end - curr ) : ZSEB_LENGTH_MAX );
 
-   char * start  = frame + curr + 3;
+   char * start  = frame + curr + 2;
    char * cutoff = frame + curr + max_len;
 
    while ( ptr > lim ){
@@ -318,15 +318,12 @@ void zseb::lzss::__longest_match__( zseb_64_t &result_ptr, zseb_16_t &result_len
       char * current = start;
       char * history = start + ( ptr - rd_shift ) - curr;
 
-      do {} while( ( *(history++) == *(current++) ) &&
-                   ( *(history++) == *(current++) ) &&
-                   ( *(history++) == *(current++) ) &&
-                   ( *(history++) == *(current++) ) && ( current < cutoff ) ); // ZSEB_FRAME is a full 1024 larger than ZSEB_TRIGGER
+      do {} while( ( *(++history) == *(++current) ) &&
+                   ( *(++history) == *(++current) ) &&
+                   ( *(++history) == *(++current) ) &&
+                   ( *(++history) == *(++current) ) && ( current < cutoff ) ); // ZSEB_FRAME is a full 1024 larger than ZSEB_TRIGGER
 
-      zseb_16_t length = ( zseb_16_t )( ( ( current >= cutoff ) ? cutoff : current ) - ( frame + curr + 1 ) );
-      if ( current >= cutoff ){ // If last equality check fails upon which current becomes cutoff -> former is OK
-         if ( *( frame + ( ptr - rd_shift ) + length ) == *( frame + curr + length ) ){ length += 1; }
-      }
+      const zseb_16_t length = ( zseb_16_t )( ( ( current >= cutoff ) ? cutoff : current ) - ( frame + curr ) );
 
       if ( length > result_len ){
          result_len = length;
