@@ -97,11 +97,11 @@ namespace zseb{
 
          void __readin__();
 
-#ifndef ZSEB_GZIP_BEST
-         void __longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len, zseb_32_t ptr, const zseb_32_t curr );
-#else
-         void __longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len, zseb_32_t ptr, const zseb_32_t curr, zseb_16_t chain_length );
-#endif
+         void __longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len, zseb_32_t ptr, const zseb_32_t curr, const zseb_32_t stop
+            #ifdef ZSEB_GZIP_BEST
+            , zseb_16_t chain_length
+            #endif
+            );
 
          inline void __move_hash__( const zseb_32_t hash_entry ); // Add hash_entry & rd_current to hash; increment rd_current
 
