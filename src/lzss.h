@@ -89,17 +89,19 @@ namespace zseb{
 
          zseb_64_t * hash_head; // hash_head['abc'] = hash_head[ c + 256 * ( b + 256 * a ) ] = file idx of latest encounter
 
-         zseb_32_t * hash_prv3; // hash_prv3[ idx ] = idx' = frame idx of encounter before idx with same 3 chars ( length ZSEB_HIST_SIZE )
+         zseb_16_t * hash_prv3; // hash_prv3[ idx ] = idx' = frame idx of encounter before idx with same 3 chars ( length ZSEB_HIST_SIZE )
 
-         zseb_32_t * hash_prv4; // hash_prv4[ idx ] = idx' = frame idx of encounter before idx with same 4 chars ( length ZSEB_HIST_SIZE )
+         zseb_16_t * hash_prv4; // hash_prv4[ idx ] = idx' = frame idx of encounter before idx with same 4 chars ( length ZSEB_HIST_SIZE )
 
          /***  Functions  ***/
 
          void __readin__();
 
-         void __longest_match__( zseb_32_t &result_ptr, zseb_16_t &result_len, zseb_32_t ptr, const zseb_32_t curr, const zseb_32_t stop
+         static void __longest_match__( char * present, zseb_16_t &result_ptr, zseb_16_t &result_len, zseb_16_t ptr, const zseb_32_t curr, const zseb_16_t runway, zseb_16_t * prev3,
             #ifdef ZSEB_GZIP_BEST
-            , zseb_16_t chain_length
+            zseb_16_t chain_length
+            #else
+            zseb_16_t * prev4
             #endif
             );
 
