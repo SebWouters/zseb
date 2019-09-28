@@ -17,7 +17,7 @@
    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#define ZSEB_VERSION   "UNRELEASED" //"0.9.1"
+#define ZSEB_VERSION   "0.9.2"
 
 #include <getopt.h>
 #include "zseb.h"

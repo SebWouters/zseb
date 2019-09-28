@@ -30,13 +30,13 @@
      // ZSEB_HIST_SIZE    32768U                          // 2^15 ( data format, defined in dtypes )
 #define ZSEB_HIST_MASK    ( ZSEB_HIST_SIZE - 1U )
 #define ZSEB_TRIGGER      ( ZSEB_HIST_SIZE << 1 )         // If ( rd_current >= ZSEB_TRIGGER ) --> shift
-#define ZSEB_FRAME        ( ZSEB_TRIGGER + 1024U )        // Important that 1024 > max( length ) = 258 !!!
+#define ZSEB_FRAME        ( ZSEB_TRIGGER + 16U )          // Important that 16 >= 8 for character comparison __longest_match__
 
 #define ZSEB_HASH_SIZE    16777216U  // ZSEB_LITLEN^3 = 2^24
 #define ZSEB_HASH_MASK    ( ZSEB_HASH_SIZE - 1U )
 #define ZSEB_HASH_STOP    0U
 
-#define ZSEB_GZIP_BEST
+//#define ZSEB_GZIP_BEST
 #define ZSEB_MAX_CHAIN    4096
 #define ZSEB_GOOD_MATCH   32
 
@@ -91,7 +91,9 @@ namespace zseb{
 
          zseb_16_t * hash_prv3; // hash_prv3[ idx ] = idx' = frame idx of encounter before idx with same 3 chars ( length ZSEB_HIST_SIZE )
 
+         #ifndef ZSEB_GZIP_BEST
          zseb_16_t * hash_prv4; // hash_prv4[ idx ] = idx' = frame idx of encounter before idx with same 4 chars ( length ZSEB_HIST_SIZE )
+         #endif
 
          /***  Functions  ***/
 
