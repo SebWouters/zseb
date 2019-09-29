@@ -30,7 +30,7 @@
      // ZSEB_HIST_SIZE    32768U                          // 2^15 ( data format, defined in dtypes )
 #define ZSEB_HIST_MASK    ( ZSEB_HIST_SIZE - 1U )
 #define ZSEB_TRIGGER      ( ZSEB_HIST_SIZE << 1 )         // If ( rd_current >= ZSEB_TRIGGER ) --> shift
-#define ZSEB_FRAME        ( ZSEB_TRIGGER + 16U )          // Important that 16 >= 8 for character comparison __longest_match__
+#define ZSEB_FRAME        ( ZSEB_TRIGGER + 272U )         // For decoding, the last input could be (dist, len) pair with len = 258
 
 #define ZSEB_HASH_SIZE    16777216U  // ZSEB_LITLEN^3 = 2^24
 #define ZSEB_HASH_MASK    ( ZSEB_HASH_SIZE - 1U )
