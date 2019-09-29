@@ -2,7 +2,7 @@ Todo
 ----
 
    - Quicken up LZSS deflate (long enough match; unthorough lazy eval)
-   - Figure out why 'gzip --best' compresses to a smaller size
+   - Figure out why 'gzip --best' compresses to a smaller size --> ? GZIP huffman encodes llen_pack & dist_pack blocks of 32767
    - Write documentation
    - dtypes.h: Ensure zseb_32_t is 32-bit in stead of assert()
    - Fixed Huffman trees hardcoded?

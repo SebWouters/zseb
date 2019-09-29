@@ -150,9 +150,9 @@ void zseb::lzss::inflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zs
          size_lzss += ( ZSEB_HIST_BIT + ZSEB_CHARBIT + 1 ); // 15-bit dist_shift [ 0 : 32767 ] + 8-bit len_shift [ 0 : 255 ] + 1-bit differentiator
 
          const zseb_32_t distance = dist_pack[ idx ] + ZSEB_DIST_SHIFT;
-         const zseb_32_t length   = llen_pack[ idx ] + ZSEB_LENGTH_SHIFT;
+         const zseb_16_t length   = llen_pack[ idx ] + ZSEB_LENGTH_SHIFT;
 
-         for ( zseb_32_t cnt = 0; cnt < length; cnt++ ){
+         for ( zseb_16_t cnt = 0; cnt < length; cnt++ ){
             frame[ rd_current + cnt ] = frame[ rd_current - distance + cnt ];
          }
          rd_current += length;
@@ -189,7 +189,7 @@ zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
       hash_entry = ( hash_entry << ZSEB_CHARBIT ) | ( zseb_08_t )( frame[ rd_current + 2 ] );
    }
 
-   wr_current = 0;
+   // wr_current = 0;
 
    // Obtain an upper_limit for rd_current, so that the current processed block does not exceed 32K
    const zseb_32_t limit1 = ( ( ( rd_shift + rd_current ) == 0 ) ? ZSEB_HIST_SIZE : ZSEB_TRIGGER );

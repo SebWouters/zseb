@@ -29,7 +29,7 @@
 #include "lzss.h"
 #include "huffman.h"
 
-#define ZSEB_PACK_SIZE      ( ZSEB_HIST_SIZE + 8U )  // Important that 8 >= 4!
+#define ZSEB_PACK_SIZE      ( ZSEB_HIST_SIZE )
 
 namespace zseb{
 
