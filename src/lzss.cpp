@@ -25,6 +25,8 @@ zseb::lzss::lzss( std::string fullfile, const char modus ){
 
    assert( ( modus == 'Z' ) || ( modus == 'U' ) );
 
+   assert( ZSEB_MMC_XVAL <= 8 ); // Else insufficient repetitions in __longest_match__
+
    size_lzss = 0;
    size_file = 0;
    checksum  = 0;
@@ -35,7 +37,7 @@ zseb::lzss::lzss( std::string fullfile, const char modus ){
    hash_head = NULL;
    hash_prv3 = NULL;
    #ifndef ZSEB_GZIP_BEST
-   hash_prv4 = NULL;
+   hash_prvx = NULL;
    #endif
 
    if ( modus == 'Z' ){
@@ -53,12 +55,12 @@ zseb::lzss::lzss( std::string fullfile, const char modus ){
          hash_head = new zseb_64_t[ ZSEB_HASH_SIZE ];
          hash_prv3 = new zseb_16_t[ ZSEB_HIST_SIZE ];
          #ifndef ZSEB_GZIP_BEST
-         hash_prv4 = new zseb_16_t[ ZSEB_HIST_SIZE ];
+         hash_prvx = new zseb_16_t[ ZSEB_HIST_SIZE ];
          #endif
          for ( zseb_32_t cnt = 0; cnt < ZSEB_HASH_SIZE; cnt++ ){ hash_head[ cnt ] = ZSEB_HASH_STOP; }
          for ( zseb_16_t cnt = 0; cnt < ZSEB_HIST_SIZE; cnt++ ){ hash_prv3[ cnt ] = ZSEB_HASH_STOP; }
          #ifndef ZSEB_GZIP_BEST
-         for ( zseb_16_t cnt = 0; cnt < ZSEB_HIST_SIZE; cnt++ ){ hash_prv4[ cnt ] = ZSEB_HASH_STOP; }
+         for ( zseb_16_t cnt = 0; cnt < ZSEB_HIST_SIZE; cnt++ ){ hash_prvx[ cnt ] = ZSEB_HASH_STOP; }
          #endif
 
          __readin__(); // Get ready for work
@@ -88,7 +90,7 @@ zseb::lzss::~lzss(){
    if ( hash_head != NULL ){ delete [] hash_head; }
    if ( hash_prv3 != NULL ){ delete [] hash_prv3; }
    #ifndef ZSEB_GZIP_BEST
-   if ( hash_prv4 != NULL ){ delete [] hash_prv4; }
+   if ( hash_prvx != NULL ){ delete [] hash_prvx; }
    #endif
 
 }
@@ -149,8 +151,8 @@ void zseb::lzss::inflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zs
 
          size_lzss += ( ZSEB_HIST_BIT + ZSEB_CHARBIT + 1 ); // 15-bit dist_shift [ 0 : 32767 ] + 8-bit len_shift [ 0 : 255 ] + 1-bit differentiator
 
-         const zseb_32_t distance = dist_pack[ idx ] + ZSEB_DIST_SHIFT;
-         const zseb_16_t length   = llen_pack[ idx ] + ZSEB_LENGTH_SHIFT;
+         const zseb_16_t distance =                  dist_pack[ idx ]     + ( ( zseb_16_t )( ZSEB_DIST_SHIFT   ) );
+         const zseb_16_t length   = ( ( zseb_16_t )( llen_pack[ idx ] ) ) + ( ( zseb_16_t )( ZSEB_LENGTH_SHIFT ) );
 
          for ( zseb_16_t cnt = 0; cnt < length; cnt++ ){
             frame[ rd_current + cnt ] = frame[ rd_current - distance + cnt ];
@@ -181,7 +183,6 @@ zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
    zseb_16_t longest_ptr1;
    zseb_16_t longest_len1;
    zseb_32_t hash_entry = 0;
-   zseb_32_t next_entry;
 
    if ( ( rd_current + ZSEB_LENGTH_SHIFT ) <= rd_end ){
       hash_entry =                                  ( zseb_08_t )( frame[ rd_current     ] );
@@ -205,7 +206,7 @@ zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
             #ifdef ZSEB_GZIP_BEST
             ZSEB_MAX_CHAIN
             #else
-            hash_prv4
+            hash_prvx
             #endif
             );
       }
@@ -217,7 +218,7 @@ zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
             #ifdef ZSEB_GZIP_BEST
             ( ( longest_len0 >= ZSEB_GOOD_MATCH ) ? ( ZSEB_MAX_CHAIN >> 2 ) : ZSEB_MAX_CHAIN )
             #else
-            hash_prv4
+            hash_prvx
             #endif
             );
       }
@@ -231,9 +232,9 @@ zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
          __append_len_encode__( llen_pack, dist_pack, wr_current, dist_shft, len_shft );
       }
 
-      // hash_prv4[ pos & ZSEB_HIST_MASK ] and hash_prv4[ ( pos + 1 ) & ZSEB_HIST_MASK ] updated via __longest_match__, with pos = rd_current
+      // hash_prvx[ pos & ZSEB_HIST_MASK ] and hash_prvx[ ( pos + 1 ) & ZSEB_HIST_MASK ] updated via __longest_match__, with pos = rd_current
       #ifndef ZSEB_GZIP_BEST
-      for ( zseb_16_t cnt = 2; cnt < longest_len0; cnt++ ){ hash_prv4[ ( rd_current - 1 + cnt ) & ZSEB_HIST_MASK ] = ZSEB_HASH_STOP; }
+      for ( zseb_16_t cnt = 1; cnt < ( longest_len0 - 1 ); cnt++ ){ hash_prvx[ ( rd_current + cnt ) & ZSEB_HIST_MASK ] = ZSEB_HASH_STOP; }
       #endif
       for ( zseb_16_t cnt = 1; cnt < longest_len0; cnt++ ){ __move_hash__( hash_entry ); }
 
@@ -252,7 +253,7 @@ zseb_32_t zseb::lzss::deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, con
 
       for ( zseb_16_t cnt = 0; cnt < ZSEB_HIST_SIZE; cnt++ ){ hash_prv3[ cnt ] = ( ( hash_prv3[ cnt ] > ZSEB_HIST_SIZE ) ? ( hash_prv3[ cnt ] ^ ZSEB_HIST_SIZE ) : 0 ); }
       #ifndef ZSEB_GZIP_BEST
-      for ( zseb_16_t cnt = 0; cnt < ZSEB_HIST_SIZE; cnt++ ){ hash_prv4[ cnt ] = ( ( hash_prv4[ cnt ] > ZSEB_HIST_SIZE ) ? ( hash_prv4[ cnt ] ^ ZSEB_HIST_SIZE ) : 0 ); }
+      for ( zseb_16_t cnt = 0; cnt < ZSEB_HIST_SIZE; cnt++ ){ hash_prvx[ cnt ] = ( ( hash_prvx[ cnt ] > ZSEB_HIST_SIZE ) ? ( hash_prvx[ cnt ] ^ ZSEB_HIST_SIZE ) : 0 ); }
       #endif
       /* Faster with rd_shift shifts
       for ( zseb_32_t cnt = 0; cnt < ZSEB_HASH_SIZE; cnt++ ){ hash_head[ cnt ] = ( ( hash_head[ cnt ] > ZSEB_HIST_SIZE ) ? ( hash_head[ cnt ] - ZSEB_HIST_SIZE ) : 0 ); } */
@@ -292,7 +293,7 @@ void zseb::lzss::__longest_match__( char * present, zseb_16_t &result_ptr, zseb_
    #ifdef ZSEB_GZIP_BEST
    zseb_16_t chain_length
    #else
-   zseb_16_t * prev4
+   zseb_16_t * prevx
    #endif
 ){
 
@@ -300,8 +301,8 @@ void zseb::lzss::__longest_match__( char * present, zseb_16_t &result_ptr, zseb_
    result_len = 1;
 
    #ifndef ZSEB_GZIP_BEST
-   zseb_16_t form4 = ( zseb_16_t )( curr & ZSEB_HIST_MASK );
-   prev4[ form4 ] = ZSEB_HASH_STOP; // Update accounted for, also if immediate return
+   zseb_16_t formx = ( zseb_16_t )( curr & ZSEB_HIST_MASK );
+   prevx[ formx ] = ZSEB_HASH_STOP; // Update accounted for, also if immediate return
    #endif
 
    const zseb_16_t max_len = ( ( ZSEB_LENGTH_MAX > runway ) ? runway : ZSEB_LENGTH_MAX );
@@ -333,12 +334,12 @@ void zseb::lzss::__longest_match__( char * present, zseb_16_t &result_ptr, zseb_
 
       #ifndef ZSEB_GZIP_BEST
       if ( chain == prev3 ){
-         if ( length >= 4 ){
-            prev4[ form4 ] = ptr;
-            form4 = ( ptr & ZSEB_HIST_MASK );
-            if ( prev4[ form4 ] > ZSEB_HASH_STOP ){ // Trace on prev4 is picked up: switch chain & quit updating
+         if ( length >= ZSEB_MMC_XVAL ){
+            prevx[ formx ] = ptr;
+            formx = ( ptr & ZSEB_HIST_MASK );
+            if ( prevx[ formx ] > ZSEB_HASH_STOP ){ // Trace on prevx is picked up: switch chain & quit updating
                start += 1;
-               chain = prev4;
+               chain = prevx;
             }
          }
       }
@@ -351,10 +352,9 @@ void zseb::lzss::__longest_match__( char * present, zseb_16_t &result_ptr, zseb_
          if ( result_len >= max_len ){
 
             /*
-            hash_prvx probably meets max_len for one string, before properly connecting.
-            For another string, with different suffix / max_len, the search on hash_prvx then prematurely ends.
-            The following aimes to solve this. Even if not used in production, it is a good test to check whether the above assumption holds.
-            Another (partial) option could be to base runway on rd_end instead of upper_limit.
+            prevx meets max_len for one string, before properly connecting.
+            For another string, with different suffix / max_len, the search on prevx then prematurely ends.
+            The following assumes proper connection.
             */
 
             #ifndef ZSEB_GZIP_BEST
@@ -367,12 +367,29 @@ void zseb::lzss::__longest_match__( char * present, zseb_16_t &result_ptr, zseb_
                   current = start;
                   history = ( start + ptr ) - curr;
 
-                  if ( ( *(++history) == *(++current) ) ){ // TODO: as many times as required for hash_prvx: (X-3) times
+                  
+                  if ( ( *(++history) == *(++current) ) // ( ZSEB_MMC_XVAL - 3 ) times
+                    #if ZSEB_MMC_XVAL > 4
+                    //#warning "ZSEB_MMC_XVAL > 4"
+                    && ( *(++history) == *(++current) )
+                    #endif
+                    #if ZSEB_MMC_XVAL > 5
+                    //#warning "ZSEB_MMC_XVAL > 5"
+                    && ( *(++history) == *(++current) )
+                    #endif
+                    #if ZSEB_MMC_XVAL > 6
+                    //#warning "ZSEB_MMC_XVAL > 6"
+                    && ( *(++history) == *(++current) )
+                    #endif
+                    #if ZSEB_MMC_XVAL > 7
+                    //#warning "ZSEB_MMC_XVAL > 7"
+                    && ( *(++history) == *(++current) )
+                    #endif
+                  ){
 
-                     prev4[ form4 ] = ptr; // TODO: should be prevx
-                     form4 = ( ptr & ZSEB_HIST_MASK ); // TODO: should be formx
-
-                     if ( prev4[ form4 ] > ZSEB_HASH_STOP ){ chain = prev4; } // TODO: Should be prevx and formx
+                     prevx[ formx ] = ptr;
+                     formx = ( ptr & ZSEB_HIST_MASK );
+                     if ( prevx[ formx ] > ZSEB_HASH_STOP ){ chain = prevx; }
 
                   }
 

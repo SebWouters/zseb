@@ -36,6 +36,8 @@
 #define ZSEB_HASH_MASK    ( ZSEB_HASH_SIZE - 1U )
 #define ZSEB_HASH_STOP    0U
 
+#define ZSEB_MMC_XVAL     5 // Should be larger than 3
+
 //#define ZSEB_GZIP_BEST
 #define ZSEB_MAX_CHAIN    32768 //4096
 #define ZSEB_GOOD_MATCH   32768 //32
@@ -92,7 +94,7 @@ namespace zseb{
          zseb_16_t * hash_prv3; // hash_prv3[ idx ] = idx' = frame idx of encounter before idx with same 3 chars ( length ZSEB_HIST_SIZE )
 
          #ifndef ZSEB_GZIP_BEST
-         zseb_16_t * hash_prv4; // hash_prv4[ idx ] = idx' = frame idx of encounter before idx with same 4 chars ( length ZSEB_HIST_SIZE )
+         zseb_16_t * hash_prvx; // hash_prvx[ idx ] = idx' = frame idx of encounter before idx with same X chars ( length ZSEB_HIST_SIZE )
          #endif
 
          /***  Functions  ***/
@@ -103,7 +105,7 @@ namespace zseb{
             #ifdef ZSEB_GZIP_BEST
             zseb_16_t chain_length
             #else
-            zseb_16_t * prev4
+            zseb_16_t * prevx
             #endif
             );
 

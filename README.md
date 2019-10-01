@@ -22,12 +22,12 @@ Info
 
 zseb is a GZIP/DEFLATE implementation compatible with RFC 1951 and RFC
 1952. zseb makes use of a minimalistic Morphing Match Chain (MMC) with
-two hash chains for respectively 3- and 4-character identities.
+two hash chains for respectively 3- and X-character identities (X > 3).
 
-As in gzip, **hash_prv3** is initially followed. Meanwhile, **hash_prv4**
-is updated correspondigly, until a chain is picked up on **hash_prv4**.
-From then on, **hash_prv4** is followed instead of **hash_prv3** and
-**hash_prv4** no longer needs to be updated. In ASCII art:
+As in gzip, **hash_prv3** is initially followed. Meanwhile, **hash_prvx**
+is updated correspondigly, until a chain is picked up on **hash_prvx**.
+From then on, **hash_prvx** is followed instead of **hash_prv3** and
+**hash_prvx** no longer needs to be updated. In ASCII art:
 
     abcd1abce2abcf3abcg4abch5abci6abcj7abck8abcl9abcg0abcd1abce2abcf3abcg4abch5abci6abcj7abck8abcl9abcg0
                    |                             |                   |    |    |    |    |    |    |
