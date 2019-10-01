@@ -347,7 +347,44 @@ void zseb::lzss::__longest_match__( char * present, zseb_16_t &result_ptr, zseb_
       if ( length > result_len ){
          result_len = length;
          result_ptr = ptr;
-         if ( result_len >= max_len ){ break; }
+
+         if ( result_len >= max_len ){
+
+            /*
+            hash_prvx probably meets max_len for one string, before properly connecting.
+            For another string, with different suffix / max_len, the search on hash_prvx then prematurely ends.
+            The following aimes to solve this. Even if not used in production, it is a good test to check whether the above assumption holds.
+            Another (partial) option could be to base runway on rd_end instead of upper_limit.
+            */
+
+            #ifndef ZSEB_GZIP_BEST
+            if ( true ){
+
+               ptr = chain[ ptr & ZSEB_HIST_MASK ];
+
+               while ( ( chain == prev3 ) && ( ptr > ptr_lim ) ){
+
+                  current = start;
+                  history = ( start + ptr ) - curr;
+
+                  if ( ( *(++history) == *(++current) ) ){ // TODO: as many times as required for hash_prvx: (X-3) times
+
+                     prev4[ form4 ] = ptr; // TODO: should be prevx
+                     form4 = ( ptr & ZSEB_HIST_MASK ); // TODO: should be formx
+
+                     if ( prev4[ form4 ] > ZSEB_HASH_STOP ){ chain = prev4; } // TODO: Should be prevx and formx
+
+                  }
+
+                  ptr = chain[ ptr & ZSEB_HIST_MASK ]; 
+
+               }
+            }
+            #endif
+
+            break;
+
+         }
       }
 
       ptr = chain[ ptr & ZSEB_HIST_MASK ];

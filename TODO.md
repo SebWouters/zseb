@@ -10,4 +10,5 @@ Todo
    - Build tree in __prefix_lengths__
    - file.write --> immediate to disk or to buffer?
    - Seems like zseb_64_t for hash_head requires long time... (many cycles)
+   - Use hash_prvx with x > 4?
 

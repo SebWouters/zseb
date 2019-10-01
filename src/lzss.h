@@ -37,8 +37,8 @@
 #define ZSEB_HASH_STOP    0U
 
 //#define ZSEB_GZIP_BEST
-#define ZSEB_MAX_CHAIN    4096
-#define ZSEB_GOOD_MATCH   32
+#define ZSEB_MAX_CHAIN    32768 //4096
+#define ZSEB_GOOD_MATCH   32768 //32
 
 namespace zseb{
 
