@@ -1,6 +1,7 @@
 #g++ -g\
 #icpc -flto -xHost -qopenmp -ipo -O3 -Wall\
-g++ -O3 -march=native -flto -funroll-loops\
+#g++ -O3 -march=native -flto -funroll-loops\
+g++ -g\
     src/main.cpp\
     src/zseb.cpp\
     src/huffman.cpp\

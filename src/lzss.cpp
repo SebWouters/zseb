@@ -25,7 +25,7 @@ zseb::lzss::lzss( std::string fullfile, const char modus ){
 
    assert( ( modus == 'Z' ) || ( modus == 'U' ) );
 
-   assert( ZSEB_MMC_XVAL <= 8 ); // Else insufficient repetitions in __longest_match__
+   assert( ZSEB_MMC_XVAL == 5 ); // Else insufficient repetitions in __longest_match__
 
    size_lzss = 0;
    size_file = 0;
@@ -367,25 +367,12 @@ void zseb::lzss::__longest_match__( char * present, zseb_16_t &result_ptr, zseb_
                   current = start;
                   history = ( start + ptr ) - curr;
 
-                  
-                  if ( ( *(++history) == *(++current) ) // ( ZSEB_MMC_XVAL - 3 ) times
-                    #if ZSEB_MMC_XVAL > 4
-                    //#warning "ZSEB_MMC_XVAL > 4"
-                    && ( *(++history) == *(++current) )
-                    #endif
-                    #if ZSEB_MMC_XVAL > 5
-                    //#warning "ZSEB_MMC_XVAL > 5"
-                    && ( *(++history) == *(++current) )
-                    #endif
-                    #if ZSEB_MMC_XVAL > 6
-                    //#warning "ZSEB_MMC_XVAL > 6"
-                    && ( *(++history) == *(++current) )
-                    #endif
-                    #if ZSEB_MMC_XVAL > 7
-                    //#warning "ZSEB_MMC_XVAL > 7"
-                    && ( *(++history) == *(++current) )
-                    #endif
-                  ){
+                  #if ZSEB_MMC_XVAL == 5
+                  if ( ( *(++history) == *(++current) ) && ( *(++history) == *(++current) ) ) // ( ZSEB_MMC_XVAL - 3 ) times
+                  #else
+                  #error "__longest_match__: adjust number of checks"
+                  #endif
+                  {
 
                      prevx[ formx ] = ptr;
                      formx = ( ptr & ZSEB_HIST_MASK );
