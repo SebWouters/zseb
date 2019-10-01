@@ -107,7 +107,7 @@ namespace zseb{
             #endif
             );
 
-         inline void __move_hash__( const zseb_32_t hash_entry ); // Add hash_entry & rd_current to hash; increment rd_current
+         inline void __move_hash__( zseb_32_t &hash_entry ); // Update hash_prv3, hash_head, rd_current and hash_entry
 
          inline void __append_lit_encode__( zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current );
 
