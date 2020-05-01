@@ -1,6 +1,6 @@
 /*
    zseb: Zipping Sequences of Encountered Bytes
-   Copyright (C) 2019 Sebastian Wouters
+   Copyright (C) 2019, 2020 Sebastian Wouters
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#define ZSEB_VERSION   "0.9.6"
+#define ZSEB_VERSION   "UNRELEASED" //"0.9.6"
 
 #include <getopt.h>
 #include "zseb.h"
@@ -64,7 +64,8 @@ std::cout << "\n"
 int main( int argc, char ** argv ){
 
    std::string infile;
-   char modus = 'A';
+   //char modus = 'A';
+   zseb_modus modus = zseb_modus::undefined;
    std::string outfile;
    bool outset = false;
    bool name = false;
@@ -97,11 +98,11 @@ int main( int argc, char ** argv ){
             break;
          case 'z':
             infile = optarg;
-            modus = 'Z';
+            modus = zseb_modus::zip;
             break;
          case 'u':
             infile = optarg;
-            modus = 'U';
+            modus = zseb_modus::unzip;
             break;
          case 'o':
             outfile = optarg;
@@ -116,41 +117,39 @@ int main( int argc, char ** argv ){
       }
    }
 
-   if ( modus == 'A' ){
-      std::cerr << "zseb: option -z or -u must be specified" << std::endl;
-      print_help();
-      return 0;
-   }
+     if (modus == zseb_modus::undefined){
+        std::cerr << "zseb: option -z or -u must be specified" << std::endl;
+        print_help();
+        return 0;
+    }
 
-   if ( ( outset == false ) && ( name == false ) ){
-      std::cerr << "zseb: option -o or -n must be specified" << std::endl;
-      print_help();
-      return 0;
-   }
+    if ( ( outset == false ) && ( name == false ) ){
+        std::cerr << "zseb: option -o or -n must be specified" << std::endl;
+        print_help();
+        return 0;
+    }
 
-   if ( modus == 'Z' ){
+    if (modus == zseb_modus::zip)
+    {
+        if ( name ){ outfile = infile + ".gz"; }
+        zseb::zseb zipper( outfile, zseb_modus::zip, print );
+        zipper.write_preamble( infile );
+        zipper.setup_flate( infile, zseb_modus::zip );
+        zipper.zip();
+        zipper.set_time( outfile );
+    }
 
-      if ( name ){ outfile = infile + ".gz"; }
-      zseb::zseb zipper( outfile, 'Z', print );
-      zipper.write_preamble( infile );
-      zipper.setup_flate( infile, 'Z' );
-      zipper.zip();
-      zipper.set_time( outfile );
+    if (modus == zseb_modus::unzip)
+    {
+        zseb::zseb unzipper( infile, zseb_modus::unzip, print );
+        std::string origname = unzipper.strip_preamble();
+        if ( name ){ outfile = origname; }
+        unzipper.setup_flate( outfile, zseb_modus::unzip );
+        unzipper.unzip();
+        unzipper.set_time( outfile );
+    }
 
-   }
-
-   if ( modus == 'U' ){
-
-      zseb::zseb unzipper( infile, 'U', print );
-      std::string origname = unzipper.strip_preamble();
-      if ( name ){ outfile = origname; }
-      unzipper.setup_flate( outfile, 'U' );
-      unzipper.unzip();
-      unzipper.set_time( outfile );
-
-   }
-
-   return 0;
+    return 0;
 
 }
 

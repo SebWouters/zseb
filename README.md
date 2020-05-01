@@ -1,7 +1,7 @@
 zseb: Zipping Sequences of Encountered Bytes
 ============================================
 
-Copyright (C) 2019 Sebastian Wouters <sebastianwouters@gmail.com>
+Copyright (C) 2019, 2020 Sebastian Wouters <sebastianwouters@gmail.com>
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

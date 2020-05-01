@@ -1,6 +1,6 @@
 /*
    zseb: Zipping Sequences of Encountered Bytes
-   Copyright (C) 2019 Sebastian Wouters
+   Copyright (C) 2019, 2020 Sebastian Wouters
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -37,11 +37,11 @@ namespace zseb{
 
       public:
 
-         zseb( std::string packfile, const char modus, const bool verbose );
+         zseb( std::string packfile, const zseb_modus modus, const bool verbose );
 
          virtual ~zseb();
 
-         void setup_flate( std::string bigfile, const char modus );
+         void setup_flate( std::string bigfile, const zseb_modus modus );
 
          void zip();
 
@@ -61,15 +61,15 @@ namespace zseb{
 
          stream * zipfile;
 
-         zseb_08_t * llen_pack; // Length ZSEB_WR_FRAME; contains lit_code OR len_shift ( packing happens later )
+         uint8_t * llen_pack; // Length ZSEB_WR_FRAME; contains lit_code OR len_shift ( packing happens later )
 
-         zseb_16_t * dist_pack; // Length ZSEB_WR_FRAME; contains dist_shift [ 0 : 32767 ] with 65535 means literal
+         uint16_t * dist_pack; // Length ZSEB_WR_FRAME; contains dist_shift [ 0 : 32767 ] with 65535 means literal
 
-         zseb_32_t wr_current;  // Currently validly filled length of llen_pack and dist_pack
+         uint32_t wr_current;  // Currently validly filled length of llen_pack and dist_pack
 
          bool print;
 
-         zseb_32_t mtime;
+         uint32_t mtime;
 
    };
 

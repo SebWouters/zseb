@@ -1,6 +1,6 @@
 /*
    zseb: Zipping Sequences of Encountered Bytes
-   Copyright (C) 2019 Sebastian Wouters
+   Copyright (C) 2019, 2020 Sebastian Wouters
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -40,33 +40,33 @@ namespace zseb{
 
          void flush();
 
-         void write( const zseb_32_t flush, const zseb_16_t nbits );
+         void write( const uint32_t flush, const uint16_t nbits );
 
-         void write( const char * buffer, const zseb_32_t size_out );
+         void write( const char * buffer, const uint32_t size_out );
 
-         static void int2str( const zseb_32_t value, char * store, const zseb_16_t num );
+         static void int2str( const uint32_t value, char * store, const uint16_t num );
 
          /***  READ FUNCTION  ***/
 
          void nextbyte();
 
-         zseb_32_t read( const zseb_16_t nbits );
+         uint32_t read( const uint16_t nbits );
 
-         void read( char * buffer, const zseb_32_t size_in );
+         void read( char * buffer, const uint32_t size_in );
 
-         static zseb_32_t str2int( const char * store, const zseb_16_t num );
+         static uint32_t str2int( const char * store, const uint16_t num );
 
          /***  FILE SIZE INFO  ***/
 
-         zseb_64_t getpos();
+         uint64_t getpos();
 
       private:
 
          std::fstream file;
 
-         zseb_32_t data; // Not yet completed byte
+         uint32_t data; // Not yet completed byte
 
-         zseb_16_t ibit; // Number of bits in not yet completed byte
+         uint16_t ibit; // Number of bits in not yet completed byte
 
    };
 

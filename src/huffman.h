@@ -1,6 +1,6 @@
 /*
    zseb: Zipping Sequences of Encountered Bytes
-   Copyright (C) 2019 Sebastian Wouters
+   Copyright (C) 2019, 2020 Sebastian Wouters
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -42,9 +42,9 @@ namespace zseb{
 
    typedef struct zseb_node {
 
-      zseb_16_t child[ 2 ];
-      zseb_16_t data;       // freq   OR bit sequence
-      zseb_16_t info;       // parent OR bit length
+      uint16_t child[ 2 ];
+      uint16_t data;       // freq   OR bit sequence
+      uint16_t info;       // parent OR bit length
 
    } zseb_node;
 
@@ -60,7 +60,7 @@ namespace zseb{
 
          void load_tree( stream * zipfile );
 
-         void calc_tree( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size );
+         void calc_tree( uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size );
 
          void write_tree( stream * zipfile ) const;
 
@@ -68,23 +68,23 @@ namespace zseb{
 
          /***  (UN)PACK  ***/
 
-         void pack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size );
+         void pack( stream * zipfile, uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size );
 
-         bool unpack( stream * zipfile, zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_32_t maxsize_pack );
+         bool unpack( stream * zipfile, uint8_t * llen_pack, uint16_t * dist_pack, uint32_t &wr_current, const uint32_t maxsize_pack );
 
          /***  Get sizes of fixed / dynamic trees  ***/
 
-         zseb_32_t get_size_X1() const{ return size_X1; }
+         uint32_t get_size_X1() const{ return size_X1; }
 
-         zseb_32_t get_size_X2() const{ return size_X2; }
+         uint32_t get_size_X2() const{ return size_X2; }
 
       private:
 
          /***  DATA: advantage of switching to data class, is that when buffers are too short, the trees are still in memory :-)  ***/
 
-         zseb_16_t * stat_comb; // Length ZSEB_HUF_COMBI: for stat_llen = stat_comb + 0 & stat_dist = stat_comb + HLIT
+         uint16_t * stat_comb; // Length ZSEB_HUF_COMBI: for stat_llen = stat_comb + 0 & stat_dist = stat_comb + HLIT
 
-         zseb_16_t * stat_ssq;  // Length ZSEB_HUF_SSQ
+         uint16_t * stat_ssq;  // Length ZSEB_HUF_SSQ
 
          zseb_node * tree_llen; // Length ZSEB_HUF_TREE_LLEN
 
@@ -92,59 +92,59 @@ namespace zseb{
 
          zseb_node * tree_ssq;  // Length ZSEB_HUF_TREE_SSQ
 
-         zseb_16_t HLIT;
+         uint16_t HLIT;
 
-         zseb_16_t HDIST;
+         uint16_t HDIST;
 
-         zseb_16_t HCLEN;
+         uint16_t HCLEN;
 
-         zseb_16_t size_ssq;
+         uint16_t size_ssq;
 
          bool * work; // Length ZSEB_HUF_TREE_LLEN; purely for combinations of zseb_node's in __build_tree__ modus 'I'
 
-         zseb_32_t size_X1;
+         uint32_t size_X1;
 
-         zseb_32_t size_X2;
+         uint32_t size_X2;
 
          /***  HELPER FUNCTIONS  ***/
 
-         static inline zseb_16_t __bit_reverse__( zseb_16_t code, const zseb_16_t nbits );
+         static inline uint16_t __bit_reverse__( uint16_t code, const uint16_t nbits );
 
-         static zseb_16_t __prefix_lengths__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, bool * temp, const zseb_16_t ZSEB_MAX_BITS );
+         static uint16_t __prefix_lengths__( uint16_t * stat, const uint16_t size, zseb_node * tree, bool * temp, const uint16_t ZSEB_MAX_BITS );
 
-         static void __build_tree__( zseb_16_t * stat, const zseb_16_t size, zseb_node * tree, bool * temp, const char option, const zseb_16_t ZSEB_MAX_BITS );
+         static void __build_tree__( uint16_t * stat, const uint16_t size, zseb_node * tree, bool * temp, const char option, const uint16_t ZSEB_MAX_BITS );
 
-         static zseb_16_t __ssq_creation__( zseb_16_t * stat, const zseb_16_t size );
+         static uint16_t __ssq_creation__( uint16_t * stat, const uint16_t size );
 
-         static void __CL_unpack__( stream * zipfile, zseb_node * tree, const zseb_16_t size, zseb_16_t * stat );
+         static void __CL_unpack__( stream * zipfile, zseb_node * tree, const uint16_t size, uint16_t * stat );
 
-         static zseb_16_t __get_sym__( stream * zipfile, zseb_node * tree );
+         static uint16_t __get_sym__( stream * zipfile, zseb_node * tree );
 
          /***  HUFFMAN TREE STATIC CONSTANTS  ***/
 
-         static const zseb_08_t map_len[ 256 ];  // code_length = 257 + map_len[ len_shift ]; ( len_shift = length - 3 )
+         static const uint8_t map_len[ 256 ];  // code_length = 257 + map_len[ len_shift ]; ( len_shift = length - 3 )
 
-         static const zseb_08_t bit_len[ 29 ];   // bits_length =       bit_len[ code_length - 257 ];
+         static const uint8_t bit_len[ 29 ];   // bits_length =       bit_len[ code_length - 257 ];
 
-         static const zseb_08_t add_len[ 29 ];   // base_length =   3 + add_len[ code_length - 257 ];
+         static const uint8_t add_len[ 29 ];   // base_length =   3 + add_len[ code_length - 257 ];
 
-         static const zseb_08_t map_dist[ 512 ]; // code_distance = ( shift < 256 ) ? map_dist[ shift ] : map_dist[ 256 ^ ( shift >> 7 ) ]; ( shift = dist - 1 )
+         static const uint8_t map_dist[ 512 ]; // code_distance = ( shift < 256 ) ? map_dist[ shift ] : map_dist[ 256 ^ ( shift >> 7 ) ]; ( shift = dist - 1 )
 
-         static const zseb_08_t bit_dist[ 30 ];  // bits_distance =     bit_dist[ code_distance ];
+         static const uint8_t bit_dist[ 30 ];  // bits_distance =     bit_dist[ code_distance ];
 
-         static const zseb_16_t add_dist[ 30 ];  // base_distance = 1 + add_dist[ code_distance ];
+         static const uint16_t add_dist[ 30 ];  // base_distance = 1 + add_dist[ code_distance ];
 
-         static const zseb_08_t map_ssq[ 19 ];
+         static const uint8_t map_ssq[ 19 ];
 
          /***  CONVERSIONS  ***/
 
-         static inline zseb_16_t  __len_code__( const zseb_08_t  len_shft ); // [ 257 : 285 ]
+         static inline uint16_t  __len_code__( const uint8_t  len_shft ); // [ 257 : 285 ]
 
-         static inline zseb_08_t  __len_bits__( const zseb_16_t  len_code ); // [ 0 : 5 ]
+         static inline uint8_t  __len_bits__( const uint16_t  len_code ); // [ 0 : 5 ]
 
-         static inline zseb_08_t  __len_base__( const zseb_16_t  len_code ); // [ 0 : 255 ]
+         static inline uint8_t  __len_base__( const uint16_t  len_code ); // [ 0 : 255 ]
 
-         static inline zseb_08_t __dist_code__( const zseb_16_t dist_shft ); // [ 0 :  29 ]
+         static inline uint8_t __dist_code__( const uint16_t dist_shft ); // [ 0 :  29 ]
 
    };
 

@@ -1,6 +1,6 @@
 /*
    zseb: Zipping Sequences of Encountered Bytes
-   Copyright (C) 2019 Sebastian Wouters
+   Copyright (C) 2019, 2020 Sebastian Wouters
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -54,14 +54,14 @@ zseb::stream::~stream(){
 
 }
 
-zseb_64_t zseb::stream::getpos(){
+uint64_t zseb::stream::getpos(){
 
-   const zseb_64_t pos = ( zseb_64_t )( file.tellg() );
+   const uint64_t pos = ( uint64_t )( file.tellg() );
    return pos;
 
 }
 
-void zseb::stream::write( const zseb_32_t flush, const zseb_16_t nbits ){
+void zseb::stream::write( const uint32_t flush, const uint16_t nbits ){
 
    /* Data ini : [ __ __ __ P5 P4 P3 P2 P1 ], ibit = 5
       Flush    = [ __ __ N6 N5 N4 N3 N2 N1 ], nbits = 6
@@ -76,16 +76,16 @@ void zseb::stream::write( const zseb_32_t flush, const zseb_16_t nbits ){
    data = data ^ ( flush << ibit ); // data mid
    ibit = ibit + nbits;
 
-   while ( ibit >= ZSEB_CHARBIT ){
-      const char towrite = ( zseb_08_t )( data & ZSEB_MASK_08T ); // Mask last 8 bits
+   while ( ibit >= CHAR_BIT ){
+      const char towrite = static_cast<uint8_t>( data & ZSEB_MASK_08T ); // Mask last 8 bits
       file.write( &towrite, 1 );
-      data = ( data >> ZSEB_CHARBIT );
-      ibit = ibit - ZSEB_CHARBIT;
+      data = ( data >> CHAR_BIT );
+      ibit = ibit - CHAR_BIT;
    }
 
 }
 
-void zseb::stream::write( const char * buffer, const zseb_32_t size_out ){
+void zseb::stream::write( const char * buffer, const uint32_t size_out ){
 
    assert( ibit == 0 );
 
@@ -96,15 +96,15 @@ void zseb::stream::write( const char * buffer, const zseb_32_t size_out ){
 void zseb::stream::flush(){
 
    while ( ibit > 0 ){
-      const char towrite = ( zseb_08_t )( data & ZSEB_MASK_08T ); // Mask last 8 bits
+      const char towrite = static_cast<uint8_t>( data & ZSEB_MASK_08T ); // Mask last 8 bits
       file.write( &towrite, 1 );
-      data  = ( data >> ZSEB_CHARBIT );
-      ibit  = ( ( ibit > ZSEB_CHARBIT ) ? ( ibit - ZSEB_CHARBIT ) : 0 );
+      data  = ( data >> CHAR_BIT );
+      ibit  = ( ( ibit > CHAR_BIT ) ? ( ibit - CHAR_BIT ) : 0 );
    }
 
 }
 
-zseb_32_t zseb::stream::read( const zseb_16_t nbits ){
+uint32_t zseb::stream::read( const uint16_t nbits ){
 
    /* Cfr. write example: P has been retrieved and removed
       Data ini : [ __ __ __ __ __ N3 N2 N1 ], ibit = 3
@@ -118,12 +118,12 @@ zseb_32_t zseb::stream::read( const zseb_16_t nbits ){
    while ( ibit < nbits ){
       char toread;
       file.read( &toread, 1 );
-      const zseb_32_t toshift = ( zseb_08_t )( toread );
+      const uint32_t toshift = static_cast<uint8_t>( toread );
       data = data ^ ( toshift << ibit );
-      ibit = ibit + ZSEB_CHARBIT;
+      ibit = ibit + CHAR_BIT;
    }
 
-   const zseb_32_t fetch = ( data & ( ( 1U << nbits ) - 1 ) ); // mask last nbits bits
+   const uint32_t fetch = ( data & ( ( 1U << nbits ) - 1 ) ); // mask last nbits bits
    data = ( data >> nbits );
    ibit = ibit - nbits;
 
@@ -135,12 +135,12 @@ void zseb::stream::nextbyte(){
 
    // For block mode X00, you need to move to next byte for read
    if ( ibit > 0 ){
-      zseb_16_t temp = read( ibit );
+      uint16_t temp = read( ibit );
    }
 
 }
 
-void zseb::stream::read( char * buffer, const zseb_32_t size_in ){
+void zseb::stream::read( char * buffer, const uint32_t size_in ){
 
    assert( ibit == 0 );
 
@@ -148,22 +148,22 @@ void zseb::stream::read( char * buffer, const zseb_32_t size_in ){
 
 }
 
-zseb_32_t zseb::stream::str2int( const char * store, const zseb_16_t num ){
+uint32_t zseb::stream::str2int( const char * store, const uint16_t num ){
 
-   zseb_32_t value = 0;
-   for ( zseb_16_t cnt = 0; cnt < num; cnt++ ){
-      value = ( value << ZSEB_CHARBIT ) ^ ( ( zseb_08_t )( store[ num - 1 - cnt ] ) );
+   uint32_t value = 0;
+   for ( uint16_t cnt = 0; cnt < num; cnt++ ){
+      value = ( value << CHAR_BIT ) ^ ( static_cast<uint8_t>( store[ num - 1 - cnt ] ) );
    }
    return value;
 
 }
 
-void zseb::stream::int2str( const zseb_32_t value, char * store, const zseb_16_t num ){
+void zseb::stream::int2str( const uint32_t value, char * store, const uint16_t num ){
 
-   zseb_32_t temp = value;
-   for ( zseb_16_t cnt = 0; cnt < num; cnt++ ){
-      store[ cnt ] = ( zseb_08_t )( temp & ZSEB_MASK_08T );
-      temp = temp >> ZSEB_CHARBIT;
+   uint32_t temp = value;
+   for ( uint16_t cnt = 0; cnt < num; cnt++ ){
+      store[ cnt ] = static_cast<uint8_t>( temp & ZSEB_MASK_08T );
+      temp = temp >> CHAR_BIT;
    }
 
 }

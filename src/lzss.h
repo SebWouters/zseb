@@ -1,6 +1,6 @@
 /*
    zseb: Zipping Sequences of Encountered Bytes
-   Copyright (C) 2019 Sebastian Wouters
+   Copyright (C) 2019, 2020 Sebastian Wouters
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -48,24 +48,24 @@ namespace zseb{
 
       public:
 
-         lzss( std::string fullfile, const char unzip );
+         lzss( std::string fullfile, const zseb_modus modus );
 
          virtual ~lzss();
 
          // Following returns "Last block?"; on input wr_current is reset to zero; on output wr_current is #elem in *_pack; max(wr_current) <= size_pack + 4
-         zseb_32_t deflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size_pack, zseb_32_t &wr_current );
+         uint32_t deflate( uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current );
 
-         void inflate( zseb_08_t * llen_pack, zseb_16_t * dist_pack, const zseb_32_t size_pack );
+         void inflate( uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack );
 
          void flush();
 
-         void copy( stream * zipfile, const zseb_16_t size_copy );
+         void copy( stream * zipfile, const uint16_t size_copy );
 
-         zseb_64_t get_lzss_bits() const{ return size_lzss; }
+         uint64_t get_lzss_bits() const{ return size_lzss; }
 
-         zseb_64_t get_file_bytes() const{ return size_file; }
+         uint64_t get_file_bytes() const{ return size_file; }
 
-         zseb_32_t get_checksum() const{ return checksum; }
+         uint32_t get_checksum() const{ return checksum; }
 
       private:
 
@@ -73,51 +73,51 @@ namespace zseb{
 
          std::fstream file;
 
-         zseb_64_t size_file; // Number of bytes in file
+         uint64_t size_file; // Number of bytes in file
 
-         zseb_64_t size_lzss; // Number of bits with pure LZSS ( 1-bit diff + 8-bit lit OR 1-bit diff + 8-bit len_shift + 15-bit dist_shift )
+         uint64_t size_lzss; // Number of bits with pure LZSS ( 1-bit diff + 8-bit lit OR 1-bit diff + 8-bit len_shift + 15-bit dist_shift )
 
          /***  Workspace  ***/
 
          char * frame; // Length ZSEB_FRAME; snippet from file --> [ rd_shift : rd_shift + rd_end ]
 
-         zseb_64_t rd_shift;   // Initial position of frame with respect to file
+         uint64_t rd_shift;   // Initial position of frame with respect to file
 
-         zseb_32_t rd_end;     // Current validly filled length of frame [ 0 : ZSEB_FRAME ]
+         uint32_t rd_end;     // Current validly filled length of frame [ 0 : ZSEB_FRAME ]
 
-         zseb_32_t rd_current; // Current position within frame; ergo current position within file = rd_shift + rd_current
+         uint32_t rd_current; // Current position within frame; ergo current position within file = rd_shift + rd_current
 
          /***  Hash table  ***/
 
-         zseb_64_t * hash_head; // hash_head['abc'] = hash_head[ c + 256 * ( b + 256 * a ) ] = file idx of latest encounter
+         uint64_t * hash_head; // hash_head['abc'] = hash_head[ c + 256 * ( b + 256 * a ) ] = file idx of latest encounter
 
-         zseb_16_t * hash_prv3; // hash_prv3[ idx ] = idx' = frame idx of encounter before idx with same 3 chars ( length ZSEB_HIST_SIZE )
+         uint16_t * hash_prv3; // hash_prv3[ idx ] = idx' = frame idx of encounter before idx with same 3 chars ( length ZSEB_HIST_SIZE )
 
          #ifndef ZSEB_GZIP_BEST
-         zseb_16_t * hash_prvx; // hash_prvx[ idx ] = idx' = frame idx of encounter before idx with same X chars ( length ZSEB_HIST_SIZE )
+         uint16_t * hash_prvx; // hash_prvx[ idx ] = idx' = frame idx of encounter before idx with same X chars ( length ZSEB_HIST_SIZE )
          #endif
 
          /***  Functions  ***/
 
          void __readin__();
 
-         static void __longest_match__( char * present, zseb_16_t &result_ptr, zseb_16_t &result_len, zseb_16_t ptr, const zseb_32_t curr, const zseb_16_t runway, zseb_16_t * prev3,
+         static void __longest_match__( char * present, uint16_t &result_ptr, uint16_t &result_len, uint16_t ptr, const uint32_t curr, const uint16_t runway, uint16_t * prev3,
             #ifdef ZSEB_GZIP_BEST
-            zseb_16_t chain_length
+            uint16_t chain_length
             #else
-            zseb_16_t * prevx
+            uint16_t * prevx
             #endif
             );
 
-         inline void __move_hash__( zseb_32_t &hash_entry ); // Update hash_prv3, hash_head, rd_current and hash_entry
+         inline void __move_hash__( uint32_t &hash_entry ); // Update hash_prv3, hash_head, rd_current and hash_entry
 
-         inline void __append_lit_encode__( zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current );
+         inline void __append_lit_encode__( uint8_t * llen_pack, uint16_t * dist_pack, uint32_t &wr_current );
 
-         inline void __append_len_encode__( zseb_08_t * llen_pack, zseb_16_t * dist_pack, zseb_32_t &wr_current, const zseb_16_t dist_shift, const zseb_08_t len_shift );
+         inline void __append_len_encode__( uint8_t * llen_pack, uint16_t * dist_pack, uint32_t &wr_current, const uint16_t dist_shift, const uint8_t len_shift );
 
          /***  CRC32 ***/
 
-         zseb_32_t checksum;
+         uint32_t checksum;
 
    };
 
