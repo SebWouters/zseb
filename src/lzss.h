@@ -1,24 +1,23 @@
 /*
-   zseb: Zipping Sequences of Encountered Bytes
-   Copyright (C) 2019, 2020 Sebastian Wouters
+    zseb: Zipping Sequences of Encountered Bytes
+    Copyright (C) 2019, 2020 Sebastian Wouters
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
-   (at your option) any later version.
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+    You should have received a copy of the GNU General Public License along
+    with this program; if not, write to the Free Software Foundation, Inc.,
+    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#ifndef __ZSEB_LZSS__
-#define __ZSEB_LZSS__
+#pragma once
 
 #include <iostream>
 #include <fstream>
@@ -27,7 +26,6 @@
 #include "dtypes.h"
 #include "stream.h"
 
-     // ZSEB_HIST_SIZE    32768U                          // 2^15 ( data format, defined in dtypes )
 #define ZSEB_HIST_MASK    ( ZSEB_HIST_SIZE - 1U )
 #define ZSEB_TRIGGER      ( ZSEB_HIST_SIZE << 1 )         // If ( rd_current >= ZSEB_TRIGGER ) --> shift
 #define ZSEB_FRAME        ( ZSEB_TRIGGER + 272U )         // For decoding, the last input could be (dist, len) pair with len = 258
@@ -37,10 +35,6 @@
 #define ZSEB_HASH_STOP    0U
 
 #define ZSEB_MMC_XVAL     5 // Should be larger than 3
-
-//#define ZSEB_GZIP_BEST
-#define ZSEB_MAX_CHAIN    32768 //4096
-#define ZSEB_GOOD_MATCH   32768 //32
 
 namespace zseb{
 
@@ -90,24 +84,14 @@ namespace zseb{
          /***  Hash table  ***/
 
          uint64_t * hash_head; // hash_head['abc'] = hash_head[ c + 256 * ( b + 256 * a ) ] = file idx of latest encounter
-
-         uint16_t * hash_prv3; // hash_prv3[ idx ] = idx' = frame idx of encounter before idx with same 3 chars ( length ZSEB_HIST_SIZE )
-
-         #ifndef ZSEB_GZIP_BEST
-         uint16_t * hash_prvx; // hash_prvx[ idx ] = idx' = frame idx of encounter before idx with same X chars ( length ZSEB_HIST_SIZE )
-         #endif
+         uint16_t * hash_prv3; // hash_prv3[ idx ] = idx' = frame idx of encounter before idx with same 3 chars (length ZSEB_HIST_SIZE)
+         uint16_t * hash_prvx; // hash_prvx[ idx ] = idx' = frame idx of encounter before idx with same X chars (length ZSEB_HIST_SIZE)
 
          /***  Functions  ***/
 
          void __readin__();
 
-         static void __longest_match__( char * present, uint16_t &result_ptr, uint16_t &result_len, uint16_t ptr, const uint32_t curr, const uint16_t runway, uint16_t * prev3,
-            #ifdef ZSEB_GZIP_BEST
-            uint16_t chain_length
-            #else
-            uint16_t * prevx
-            #endif
-            );
+         static void __longest_match__(char * present, uint16_t &result_ptr, uint16_t &result_len, uint16_t ptr, const uint32_t curr, const uint16_t runway, uint16_t * prev3, uint16_t * prevx);
 
          inline void __move_hash__( uint32_t &hash_entry ); // Update hash_prv3, hash_head, rd_current and hash_entry
 
@@ -123,4 +107,3 @@ namespace zseb{
 
 }
 
-#endif
