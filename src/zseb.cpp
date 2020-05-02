@@ -36,8 +36,8 @@ zseb::zseb::zseb( std::string packfile, const zseb_modus modus, const bool verbo
    flate     = NULL;
    coder     = new huffman();
    zipfile   = new stream( packfile, ( ( modus == zseb_modus::zip ) ? 'W' : 'R' ) );
-   llen_pack = new uint8_t[ ZSEB_PACK_SIZE ];
-   dist_pack = new uint16_t[ ZSEB_PACK_SIZE ];
+   llen_pack = new  uint8_t[ ZSEB_ARRAY_SIZE ];
+   dist_pack = new uint16_t[ ZSEB_ARRAY_SIZE ];
    wr_current = 0;
    mtime     = 0;
 
@@ -85,13 +85,13 @@ void zseb::zseb::write_preamble( std::string bigfile ){
    stream::int2str( mtime, temp, 4 );
 
    /***  GZIP header  ***/
-   /* ID1 */ var = static_cast<uint8_t>( 0x1f ); zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
-   /* ID2 */ var = static_cast<uint8_t>( 0x8b ); zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
-   /* CM  */ var = static_cast<uint8_t>( 8 );    zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
-   /* FLG */ var = static_cast<uint8_t>( 10 );   zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); // (0, 0, 0, FCOMMENT=0, FNAME=1, FEXTRA=0, FHCRC=1, FTEXT=0 )
-   /* MTIME */                                   zipfile->write( temp, 4 ); crc16 = crc32::update( crc16, temp, 4 );
-   /* XFL */ var = static_cast<uint8_t>( 0 );    zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
-   /* OS  */ var = static_cast<uint8_t>( 255 );  zipfile->write( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 ); // Unknown Operating System
+   /* ID1 */ var = static_cast<uint8_t>(0x1f); zipfile->write(&var, 1); crc16 = crc32::update(crc16, &var, 1);
+   /* ID2 */ var = static_cast<uint8_t>(0x8b); zipfile->write(&var, 1); crc16 = crc32::update(crc16, &var, 1);
+   /* CM  */ var = static_cast<uint8_t>(8);    zipfile->write(&var, 1); crc16 = crc32::update(crc16, &var, 1);
+   /* FLG */ var = static_cast<uint8_t>(10);   zipfile->write(&var, 1); crc16 = crc32::update(crc16, &var, 1); // (0, 0, 0, FCOMMENT=0, FNAME=1, FEXTRA=0, FHCRC=1, FTEXT=0 )
+   /* MTIME */                                 zipfile->write(temp, 4); crc16 = crc32::update(crc16, temp, 4);
+   /* XFL */ var = static_cast<uint8_t>(0);    zipfile->write(&var, 1); crc16 = crc32::update(crc16, &var, 1);
+   /* OS  */ var = static_cast<uint8_t>(255);  zipfile->write(&var, 1); crc16 = crc32::update(crc16, &var, 1); // Unknown Operating System
 
    // FLG.FEXTRA --> no
    // FLG.FNAME  --> yes
@@ -187,28 +187,30 @@ std::string zseb::zseb::strip_preamble(){
 
 }
 
-void zseb::zseb::zip(){
+void zseb::zseb::zip()
+{
+    uint64_t size_zlib = zipfile->getpos(); // Preamble are full bytes
 
-   uint64_t size_zlib = zipfile->getpos(); // Preamble are full bytes
+    bool last_block = false;
+    uint32_t block_form;
 
-   uint32_t last_block = 0;
-   uint32_t block_form;
+    struct timeval start, end;
+    double time_lzss = 0.0;
+    double time_huff = 0.0;
 
-   struct timeval start, end;
-   double time_lzss = 0;
-   double time_huff = 0;
-
-   while ( last_block == 0 ){
-
-      // LZSS a block
-      gettimeofday( &start, NULL );
-      last_block = flate->deflate( llen_pack, dist_pack, ZSEB_PACK_SIZE, wr_current );
-      gettimeofday( &end, NULL );
-      time_lzss += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
+    while ((!last_block) || (wr_current > 0))
+    {
+        // LZSS a block: gzip packs (llen_pack, dist_pack) blocks of size 32767
+        gettimeofday( &start, NULL );
+        while ((!last_block) && (wr_current < ZSEB_BLOCK_SIZE))
+            last_block = flate->deflate( llen_pack, dist_pack, ZSEB_ARRAY_SIZE, wr_current );
+        const uint32_t huffman_size = wr_current < ZSEB_BLOCK_SIZE ? wr_current : ZSEB_BLOCK_SIZE;
+        gettimeofday( &end, NULL );
+        time_lzss += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 
       // Compute dynamic Huffman trees & X01 and X10 sizes
       gettimeofday( &start, NULL );
-      coder->calc_tree( llen_pack, dist_pack, wr_current );
+      coder->calc_tree( llen_pack, dist_pack, huffman_size );
       const uint32_t size_X1 = coder->get_size_X1();
       const uint32_t size_X2 = coder->get_size_X2();
       gettimeofday( &end, NULL );
@@ -216,7 +218,7 @@ void zseb::zseb::zip(){
 
       // What is the minimal output?
       block_form = ( ( size_X2 < size_X1 ) ? 2 : 1 );
-      zipfile->write( last_block, 1 );
+      zipfile->write( last_block ? 1 : 0, 1 );
       zipfile->write( block_form, 2 );
 
       // Write out
@@ -226,11 +228,20 @@ void zseb::zseb::zip(){
       } else {
          coder->fixed_tree( 'O' );
       }
-      coder->pack( zipfile, llen_pack, dist_pack, wr_current );
+      coder->pack( zipfile, llen_pack, dist_pack, huffman_size );
       gettimeofday( &end, NULL );
       time_huff += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 
-      wr_current = 0;
+        //Shift the non-used tail of llen_pack & dist_pack down
+        wr_current = wr_current - huffman_size;
+        if (wr_current > 0)
+        {
+            for (uint32_t cnt = 0; cnt < wr_current; ++cnt)
+                llen_pack[cnt] = llen_pack[huffman_size + cnt];
+            for (uint32_t cnt = 0; cnt < wr_current; ++cnt)
+                dist_pack[cnt] = dist_pack[huffman_size + cnt];
+        }
+        //wr_current = 0;
 
    }
 
@@ -273,8 +284,8 @@ void zseb::zseb::unzip(){
    uint32_t block_form;
 
    struct timeval start, end;
-   double time_lzss = 0;
-   double time_huff = 0;
+   double time_lzss = 0.0;
+   double time_huff = 0.0;
 
    while ( last_block == 0 ){
 
@@ -296,6 +307,7 @@ void zseb::zseb::unzip(){
             std::cerr << "zseb: Block type X00: NLEN != ( ~LEN )" << std::endl;
             exit( 255 );
          }
+            std::cout << "Block form X00 (uncompressed) with size " << LEN << std::endl;
          flate->copy( zipfile, LEN );
 
       } else {
@@ -303,22 +315,26 @@ void zseb::zseb::unzip(){
          gettimeofday( &start, NULL );
          if ( block_form == 2 ){ // Dynamic trees
             coder->load_tree( zipfile );
+            std::cout << "Block form X10 (dynamic tree)";
          } else { // block_form == 1 ---> Fixed trees
             coder->fixed_tree( 'I' );
+            std::cout << "Block form X01 (fixed tree)";
          }
          gettimeofday( &end, NULL );
          time_huff += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 
          bool remain = true;
+         uint32_t lzss_block_size = 0U;
 
          while ( remain ){
 
             gettimeofday( &start, NULL );
-            remain = coder->unpack( zipfile, llen_pack, dist_pack, wr_current, ZSEB_PACK_SIZE );
+            remain = coder->unpack( zipfile, llen_pack, dist_pack, wr_current, ZSEB_ARRAY_SIZE );
             gettimeofday( &end, NULL );
             time_huff += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 
             if ( wr_current > 0 ){
+                lzss_block_size += wr_current;
                gettimeofday( &start, NULL );
                flate->inflate( llen_pack, dist_pack, wr_current );
                gettimeofday( &end, NULL );
@@ -328,6 +344,7 @@ void zseb::zseb::unzip(){
             wr_current = 0;
 
          }
+            std::cout << " with size " << lzss_block_size << std::endl;
       }
    }
 

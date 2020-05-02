@@ -34,7 +34,14 @@
 #define ZSEB_HASH_MASK    ( ZSEB_HASH_SIZE - 1U )
 #define ZSEB_HASH_STOP    0U
 
-#define ZSEB_MMC_XVAL     5 // Should be larger than 3
+#define GZIP_BEST
+#ifndef GZIP_BEST
+    #define ZSEB_MMC_XVAL 5 // Should be larger than 3
+#else
+    #define GZIP_GOOD_LENGTH 32
+    #define GZIP_MAX_LENGTH  4096
+    #define GZIP_TOO_FAR     4096
+#endif
 
 namespace zseb{
 
@@ -47,7 +54,7 @@ namespace zseb{
          virtual ~lzss();
 
          // Following returns "Last block?"; on input wr_current is reset to zero; on output wr_current is #elem in *_pack; max(wr_current) <= size_pack + 4
-         uint32_t deflate( uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current );
+         bool deflate( uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current );
 
          void inflate( uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack );
 
@@ -85,13 +92,13 @@ namespace zseb{
 
          uint64_t * hash_head; // hash_head['abc'] = hash_head[ c + 256 * ( b + 256 * a ) ] = file idx of latest encounter
          uint16_t * hash_prv3; // hash_prv3[ idx ] = idx' = frame idx of encounter before idx with same 3 chars (length ZSEB_HIST_SIZE)
+#ifndef GZIP_BEST
          uint16_t * hash_prvx; // hash_prvx[ idx ] = idx' = frame idx of encounter before idx with same X chars (length ZSEB_HIST_SIZE)
+#endif
 
          /***  Functions  ***/
 
          void __readin__();
-
-         static void __longest_match__(char * present, uint16_t &result_ptr, uint16_t &result_len, uint16_t ptr, const uint32_t curr, const uint16_t runway, uint16_t * prev3, uint16_t * prevx);
 
          inline void __move_hash__( uint32_t &hash_entry ); // Update hash_prv3, hash_head, rd_current and hash_entry
 

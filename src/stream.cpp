@@ -77,7 +77,7 @@ void zseb::stream::write( const uint32_t flush, const uint16_t nbits ){
    ibit = ibit + nbits;
 
    while ( ibit >= CHAR_BIT ){
-      const char towrite = static_cast<uint8_t>( data & ZSEB_MASK_08T ); // Mask last 8 bits
+      const char towrite = static_cast<uint8_t>( data & UINT8_MAX ); // Mask last 8 bits
       file.write( &towrite, 1 );
       data = ( data >> CHAR_BIT );
       ibit = ibit - CHAR_BIT;
@@ -96,7 +96,7 @@ void zseb::stream::write( const char * buffer, const uint32_t size_out ){
 void zseb::stream::flush(){
 
    while ( ibit > 0 ){
-      const char towrite = static_cast<uint8_t>( data & ZSEB_MASK_08T ); // Mask last 8 bits
+      const char towrite = static_cast<uint8_t>( data & UINT8_MAX ); // Mask last 8 bits
       file.write( &towrite, 1 );
       data  = ( data >> CHAR_BIT );
       ibit  = ( ( ibit > CHAR_BIT ) ? ( ibit - CHAR_BIT ) : 0 );
@@ -162,7 +162,7 @@ void zseb::stream::int2str( const uint32_t value, char * store, const uint16_t n
 
    uint32_t temp = value;
    for ( uint16_t cnt = 0; cnt < num; cnt++ ){
-      store[ cnt ] = static_cast<uint8_t>( temp & ZSEB_MASK_08T );
+      store[ cnt ] = static_cast<uint8_t>( temp & UINT8_MAX );
       temp = temp >> CHAR_BIT;
    }
 

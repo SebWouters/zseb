@@ -32,7 +32,6 @@
 
 #define ZSEB_256_16T      (static_cast<uint16_t>(256U))
 
-#define ZSEB_MASK_08T     0xffU
 #define ZSEB_MASK_16T     0xffffU
 #define ZSEB_MASK_32T     0xffffffffU
 
@@ -45,6 +44,8 @@ enum zseb_modus
     zip,
     unzip
 };
+
+constexpr uint32_t positive_difference(uint32_t left, uint32_t right) noexcept { return left > right ? left - right : 0U; }
 
 } // End of namespace zseb
 

@@ -22,15 +22,13 @@
 #include <stdint.h>
 #include <limits.h>
 
-#define CRC32_REVERSE 0xedb88320U
-
 namespace zseb
 {
 namespace crc32
 {
 
 
-constexpr const uint32_t table[UINT8_MAX + 1U] =
+constexpr const uint32_t table[UINT8_MAX + 1] =
 {
   0x00000000U, 0x77073096U, 0xee0e612cU, 0x990951baU, 0x076dc419U, 0x706af48fU, 0xe963a535U, 0x9e6495a3U,
   0x0edb8832U, 0x79dcb8a4U, 0xe0d5e91eU, 0x97d2d988U, 0x09b64c2bU, 0x7eb17cbdU, 0xe7b82d07U, 0x90bf1d91U,
@@ -69,10 +67,12 @@ constexpr const uint32_t table[UINT8_MAX + 1U] =
 
 constexpr uint32_t entry(uint32_t value) noexcept
 {
-    for (uint8_t k = 0U; k < CHAR_BIT; ++k)
+    constexpr const uint32_t crc32reverse = 0xedb88320U;
+
+    for (uint8_t k = 0; k < CHAR_BIT; ++k)
     {
         if (value & 1U)
-            value = CRC32_REVERSE ^ (value >> 1U);
+            value = crc32reverse ^ (value >> 1U);
         else
             value = (value >> 1U);
     }
@@ -85,7 +85,7 @@ constexpr uint32_t update(const uint32_t crc, const char * data, const uint32_t 
 {
     uint32_t work = crc ^ UINT32_MAX;
 
-    for (uint32_t index = 0U; index < length; ++index)
+    for (uint32_t index = 0; index < length; ++index)
         work = table[(work ^ data[index]) & UINT8_MAX] ^ (work >> CHAR_BIT);
 
     return work ^ UINT32_MAX;
