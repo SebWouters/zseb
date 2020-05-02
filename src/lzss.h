@@ -26,23 +26,6 @@
 #include "dtypes.h"
 #include "stream.h"
 
-#define ZSEB_HIST_MASK    ( ZSEB_HIST_SIZE - 1U )
-#define ZSEB_TRIGGER      ( ZSEB_HIST_SIZE << 1 )         // If ( rd_current >= ZSEB_TRIGGER ) --> shift
-#define ZSEB_FRAME        ( ZSEB_TRIGGER + 272U )         // For decoding, the last input could be (dist, len) pair with len = 258
-
-#define ZSEB_HASH_SIZE    16777216U  // ZSEB_LITLEN^3 = 2^24
-#define ZSEB_HASH_MASK    ( ZSEB_HASH_SIZE - 1U )
-#define ZSEB_HASH_STOP    0U
-
-#define GZIP_BEST
-#ifndef GZIP_BEST
-    #define ZSEB_MMC_XVAL 5 // Should be larger than 3
-#else
-    #define GZIP_GOOD_LENGTH 32
-    #define GZIP_MAX_LENGTH  4096
-    #define GZIP_TOO_FAR     4096
-#endif
-
 namespace zseb{
 
    class lzss{
@@ -91,10 +74,8 @@ namespace zseb{
          /***  Hash table  ***/
 
          uint64_t * hash_head; // hash_head['abc'] = hash_head[ c + 256 * ( b + 256 * a ) ] = file idx of latest encounter
+
          uint16_t * hash_prv3; // hash_prv3[ idx ] = idx' = frame idx of encounter before idx with same 3 chars (length ZSEB_HIST_SIZE)
-#ifndef GZIP_BEST
-         uint16_t * hash_prvx; // hash_prvx[ idx ] = idx' = frame idx of encounter before idx with same X chars (length ZSEB_HIST_SIZE)
-#endif
 
          /***  Functions  ***/
 

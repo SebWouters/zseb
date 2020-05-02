@@ -28,8 +28,6 @@
 #include "lzss.h"
 #include "huffman.h"
 
-//#define ZSEB_PACK_SIZE      ( ZSEB_HIST_SIZE )
-//#define ZSEB_PACK_SIZE (1U << 16U)
 #define ZSEB_ARRAY_SIZE 65536U
 #define ZSEB_BLOCK_SIZE 32767U // GZIP packs in blocks of 32767
 

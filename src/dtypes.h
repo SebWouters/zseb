@@ -22,13 +22,8 @@
 #include <stdint.h>
 #include <limits.h>
 
-//#define ZSEB_HIST_SIZE    32768U     // 2^15
 #define ZSEB_HIST_BIT     15U
-#define ZSEB_HIST_SIZE    (1U << ZSEB_HIST_BIT)
 #define ZSEB_LITLEN       (1U << CHAR_BIT)
-#define ZSEB_LENGTH_SHIFT 3U         // length = ZSEB_LENGTH_SHIFT + len_shift
-#define ZSEB_LENGTH_MAX   258U
-#define ZSEB_DIST_SHIFT   1U         // distance = ZSEB_DIST_SHIFT + dist_shift
 
 #define ZSEB_256_16T      (static_cast<uint16_t>(256U))
 
@@ -45,7 +40,26 @@ enum zseb_modus
     unzip
 };
 
-constexpr uint32_t positive_difference(uint32_t left, uint32_t right) noexcept { return left > right ? left - right : 0U; }
+void pos_diff( uint8_t left,  uint8_t right);
+void pos_diff( uint8_t left, uint16_t right);
+void pos_diff( uint8_t left, uint32_t right);
+void pos_diff( uint8_t left, uint64_t right);
+void pos_diff(uint16_t left,  uint8_t right);
+// for uint16_t, uint16_t see below
+void pos_diff(uint16_t left, uint32_t right);
+void pos_diff(uint16_t left, uint64_t right);
+void pos_diff(uint32_t left,  uint8_t right);
+void pos_diff(uint32_t left, uint16_t right);
+// for uint32_t, uint32_t see below
+void pos_diff(uint32_t left, uint64_t right);
+void pos_diff(uint64_t left,  uint8_t right);
+void pos_diff(uint64_t left, uint16_t right);
+void pos_diff(uint64_t left, uint32_t right);
+// for uint64_t, uint64_t see below
+
+constexpr uint16_t pos_diff(uint16_t left, uint16_t right) noexcept { return left > right ? left - right : 0; }
+constexpr uint32_t pos_diff(uint32_t left, uint32_t right) noexcept { return left > right ? left - right : 0; }
+constexpr uint64_t pos_diff(uint64_t left, uint64_t right) noexcept { return left > right ? left - right : 0; }
 
 } // End of namespace zseb
 

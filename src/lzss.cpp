@@ -24,141 +24,78 @@
 
 namespace zseb
 {
-
-constexpr std::pair<uint16_t, uint16_t> lzss_match(char * window, uint16_t ptr, const uint32_t curr, const uint32_t runway, uint16_t * prev3,
-#ifndef GZIP_BEST
-uint16_t * prevx
-#else
-uint16_t chain_length
-#endif
-) noexcept
+namespace lz77
 {
-    uint16_t result_ptr = ZSEB_HASH_STOP;
-    uint16_t result_len = 1U;
 
-#ifndef GZIP_BEST
-    uint16_t formx = static_cast<uint16_t>(curr & ZSEB_HIST_MASK);
-    prevx[formx] = ZSEB_HASH_STOP; // Update accounted for, also if immediate return
-#endif
+// LZ77 parameters
+constexpr const uint32_t MAX_MATCH    = 258;
+constexpr const uint32_t LEN_SHIFT    = 3;
+constexpr const uint32_t DIS_SHIFT    = 1;
+constexpr const uint32_t HIST_SIZE    = 32768; // 2^15
+constexpr const uint32_t HIST_MASK    = HIST_SIZE - 1;
+constexpr const uint32_t HASH_SIZE    = 16777216; // 256^3
+constexpr const uint32_t HASH_MASK    = HASH_SIZE - 1;
+constexpr const uint32_t HASH_STOP    = 0;
 
-    const uint16_t max_len = std::min(ZSEB_LENGTH_MAX, runway);//ZSEB_LENGTH_MAX > runway ? runway : ZSEB_LENGTH_MAX;
-    if (max_len < ZSEB_LENGTH_SHIFT)
-        return { ZSEB_HASH_STOP, 1U };
+// Memory-related parameters
+constexpr const uint32_t DISK_TRIGGER = 2 * HIST_SIZE;
+constexpr const uint32_t FRAME_SIZE   = DISK_TRIGGER + 272;
 
-    char * start  = window + curr + 2;       // frame + rd_current + 2
-    char * cutoff = window + curr + max_len; // frame + rd_current + max_len
+// Some GZIP parameters
+constexpr const uint32_t GZIP_TOO_FAR = 4096;
+constexpr const uint32_t GZIP_CHAIN   = 4096;
+constexpr const uint32_t GZIP_GOOD    = 32;
 
-    const uint16_t ptr_lim = positive_difference(curr, ZSEB_HIST_SIZE); // curr > ZSEB_HIST_SIZE ? static_cast<uint16_t>(curr - ZSEB_HIST_SIZE) : 0U;
+constexpr std::pair<uint16_t, uint16_t> match(char * window, uint16_t ptr, const uint32_t current, const uint32_t runway, uint16_t * prev3, uint16_t chain_length) noexcept
+{
+    const uint16_t max_len = std::min(MAX_MATCH, runway);
+    const uint16_t ptr_lim = pos_diff(current, HIST_SIZE);
+    if (max_len < LEN_SHIFT)
+        return { HASH_STOP, 1 };
 
-    uint16_t * chain = prev3;
+    char * start  = window + current + 2;
+    char * cutoff = window + current + max_len;
 
-    while ((ptr > ptr_lim)  // Only performed when pointer != 0
-#ifdef GZIP_BEST
-        && (chain_length-- != 0)
-#endif
-    )
+    uint16_t result_ptr = HASH_STOP;
+    uint16_t result_len = 1;
+
+    while ((ptr > ptr_lim) && (chain_length-- != 0))
     {
-//        #ifdef GZIP_BEST
-        if ((window[curr + result_len] != window[ptr + result_len]) ||
-            (window[curr + result_len - 1U] != window[ptr + result_len - 1U]))
+        if ((window[current + result_len] != window[ptr + result_len]) ||
+            (window[current + result_len - 1U] != window[ptr + result_len - 1U]))
         {
-#ifndef GZIP_BEST
-            #if ZSEB_MMC_XVAL == 5
-            if ((chain == prev3) && (window[curr + 3] == window[ptr + 3]) && (window[curr + 4] == window[ptr + 4]))
-            #else
-            #error "__longest_match__: adjust number of checks"
-            #endif
-            {
-                prevx[formx] = ptr;
-                formx = ptr & ZSEB_HIST_MASK;
-                if (prevx[formx] > ZSEB_HASH_STOP) // Trace on prevx is picked up: switch chain & quit updating
-                {
-                    start += ZSEB_MMC_XVAL - 3; // frame + rd_current + (ZSEB_MMC_XVAL - 1)
-                    chain = prevx;
-                }
-            }
-#endif
-            ptr = chain[ptr & ZSEB_HIST_MASK];
+            ptr = prev3[ptr & HIST_MASK];
             continue;
         }
-//        #endif
 
-        char * current = start;            // frame + rd_current + 2
-        char * history = window + ptr + 2; // frame + ptr        + 2
+        char * present = start;
+        char * history = window + ptr + 2;
 
-        do {} while( ( *(++history) == *(++current) ) && ( *(++history) == *(++current) ) &&
-                     ( *(++history) == *(++current) ) && ( *(++history) == *(++current) ) &&
-                     ( *(++history) == *(++current) ) && ( *(++history) == *(++current) ) &&
-                     ( *(++history) == *(++current) ) && ( *(++history) == *(++current) ) &&
-                     ( current < cutoff ) ); // ZSEB_FRAME is a full 272 larger than ZSEB_TRIGGER
+        do {} while( ( *(++history) == *(++present) ) && ( *(++history) == *(++present) ) &&
+                     ( *(++history) == *(++present) ) && ( *(++history) == *(++present) ) &&
+                     ( *(++history) == *(++present) ) && ( *(++history) == *(++present) ) &&
+                     ( *(++history) == *(++present) ) && ( *(++history) == *(++present) ) &&
+                     ( present < cutoff ) ); // FRAME_SIZE is a full 272 larger than DISK_TRIGGER
 
-        //const uint16_t length = static_cast<uint16_t>( ( ( current >= cutoff ) ? cutoff : current ) - present );
-        const uint16_t length = static_cast<uint16_t>(current >= cutoff ? max_len : max_len - (cutoff - current));
-
-#ifndef GZIP_BEST
-        if ((chain == prev3) && (length >= ZSEB_MMC_XVAL))
-        {
-            prevx[formx] = ptr;
-            formx = ptr & ZSEB_HIST_MASK;
-            if (prevx[formx] > ZSEB_HASH_STOP) // Trace on prevx is picked up: switch chain & quit updating
-            {
-                start += ZSEB_MMC_XVAL - 3; // frame + rd_current + (ZSEB_MMC_XVAL - 1)
-                chain = prevx;
-            }
-        }
-#endif
+        const uint16_t length = static_cast<uint16_t>(present >= cutoff ? max_len : max_len - (cutoff - present));
 
         if (length > result_len)
         {
             result_len = length;
             result_ptr = ptr;
-
             if (result_len >= max_len)
-            {
-                /*
-                prevx meets max_len for one string, before properly connecting.
-                For another string, with different suffix / max_len, the search on prevx then prematurely ends.
-                The following ensures proper connection.
-                */
-
-                ptr = chain[ptr & ZSEB_HIST_MASK];
-
-#ifndef GZIP_BEST
-                while ((chain == prev3) && (ptr > ptr_lim))
-                {
-                    current = start;
-                    history = (start + ptr) - curr;
-
-                    #if ZSEB_MMC_XVAL == 5
-                    if ((*(++history) == *(++current)) && (*(++history) == *(++current))) // ( ZSEB_MMC_XVAL - 3 ) times
-                    #else
-                    #error "__longest_match__: adjust number of checks"
-                    #endif
-                    {
-                        prevx[formx] = ptr;
-                        formx = ptr & ZSEB_HIST_MASK;
-                        if (prevx[formx] > ZSEB_HASH_STOP)
-                            chain = prevx;
-                    }
-
-                    ptr = chain[ptr & ZSEB_HIST_MASK];
-                }
-#endif
-
                 break;
-            }
         }
-        ptr = chain[ptr & ZSEB_HIST_MASK];
+        ptr = prev3[ptr & HIST_MASK];
     }
 
-#ifdef GZIP_BEST
-    if ((result_len == ZSEB_LENGTH_SHIFT) && (result_ptr + GZIP_TOO_FAR < curr))
-        return { ZSEB_HASH_STOP, 1U };
-#endif
+    if ((result_len == LEN_SHIFT) && (result_ptr + GZIP_TOO_FAR < current))
+        return { HASH_STOP, 1U };
 
     return { result_ptr, result_len };
 }
 
+} // End of namespace lz77
 } // End of namespace zseb
 
 
@@ -167,10 +104,6 @@ uint16_t chain_length
 zseb::lzss::lzss( std::string fullfile, const zseb_modus modus ){
 
    assert(modus != zseb_modus::undefined);
-
-#ifndef GZIP_BEST
-   assert( ZSEB_MMC_XVAL == 5 ); // Else insufficient repetitions in lzss_match
-#endif
 
    size_lzss = 0;
    size_file = 0;
@@ -181,9 +114,6 @@ zseb::lzss::lzss( std::string fullfile, const zseb_modus modus ){
    frame     = NULL;
    hash_head = NULL;
    hash_prv3 = NULL;
-#ifndef GZIP_BEST
-   hash_prvx = NULL;
-#endif
 
    if ( modus == zseb_modus::zip ){
 
@@ -194,19 +124,13 @@ zseb::lzss::lzss( std::string fullfile, const zseb_modus modus ){
          size_file = static_cast<uint64_t>( file.tellg() );
          file.seekg( 0, std::ios::beg );
 
-         frame = new char[ ZSEB_FRAME ];
-         for ( uint32_t cnt = 0; cnt < ZSEB_FRAME; cnt++ ){ frame[ cnt ] = 0U; } // Because match check can go up to 4 beyond rd_end
+         frame = new char[zseb::lz77::FRAME_SIZE];
+         for (uint32_t cnt = 0; cnt < zseb::lz77::FRAME_SIZE; ++cnt){ frame[ cnt ] = 0U; } // Because match check can go up to 4 beyond rd_end
 
-         hash_head = new uint64_t[ ZSEB_HASH_SIZE ];
-         hash_prv3 = new uint16_t[ ZSEB_HIST_SIZE ];
-#ifndef GZIP_BEST
-         hash_prvx = new uint16_t[ ZSEB_HIST_SIZE ];
-#endif
-         for ( uint32_t cnt = 0; cnt < ZSEB_HASH_SIZE; cnt++ ){ hash_head[ cnt ] = ZSEB_HASH_STOP; }
-         for ( uint16_t cnt = 0; cnt < ZSEB_HIST_SIZE; cnt++ ){ hash_prv3[ cnt ] = ZSEB_HASH_STOP; }
-#ifndef GZIP_BEST
-         for ( uint16_t cnt = 0; cnt < ZSEB_HIST_SIZE; cnt++ ){ hash_prvx[ cnt ] = ZSEB_HASH_STOP; }
-#endif
+         hash_head = new uint64_t[ zseb::lz77::HASH_SIZE ];
+         hash_prv3 = new uint16_t[ zseb::lz77::HIST_SIZE ];
+         for (uint32_t cnt = 0; cnt < zseb::lz77::HASH_SIZE; ++cnt){ hash_head[ cnt ] = zseb::lz77::HASH_STOP; }
+         for (uint32_t cnt = 0; cnt < zseb::lz77::HIST_SIZE; ++cnt){ hash_prv3[ cnt ] = zseb::lz77::HASH_STOP; }
 
          __readin__(); // Get ready for work
 
@@ -222,7 +146,7 @@ zseb::lzss::lzss( std::string fullfile, const zseb_modus modus ){
 
       file.open( fullfile.c_str(), std::ios::out|std::ios::binary|std::ios::trunc );
 
-      frame = new char[ ZSEB_FRAME ];
+      frame = new char[zseb::lz77::FRAME_SIZE];
 
    }
 
@@ -234,9 +158,6 @@ zseb::lzss::~lzss()
     if (frame     != NULL){ delete [] frame;     }
     if (hash_head != NULL){ delete [] hash_head; }
     if (hash_prv3 != NULL){ delete [] hash_prv3; }
-#ifndef GZIP_BEST
-    if (hash_prvx != NULL){ delete [] hash_prvx; }
-#endif
 }
 
 void zseb::lzss::flush()
@@ -250,14 +171,14 @@ void zseb::lzss::flush()
 void zseb::lzss::copy(stream * zipfile, const uint16_t size_copy)
 {
     uint32_t nwrite = 0;
-    if (size_copy > ZSEB_HIST_SIZE)
+    if (size_copy > zseb::lz77::HIST_SIZE)
         nwrite = rd_current; // Write everything away, there will be still enough history
-    else // ( ZSEB_HIST_SIZE - size_copy ) >= 0
+    else // ( zseb::lz77::HIST_SIZE - size_copy ) >= 0
     {
-        if ( rd_current > ( ZSEB_HIST_SIZE - size_copy ) ){
-         nwrite = rd_current - ( ZSEB_HIST_SIZE - size_copy ); // rd_current + size_copy - nwrite = ZSEB_HIST_SIZE
+        if ( rd_current > ( zseb::lz77::HIST_SIZE - size_copy ) ){
+         nwrite = rd_current - ( zseb::lz77::HIST_SIZE - size_copy ); // rd_current + size_copy - nwrite = zseb::lz77::HIST_SIZE
       }
-      // If rd_current + size_copy <= ZSEB_HIST_SIZE, no need to write
+      // If rd_current + size_copy <= zseb::lz77::HIST_SIZE, no need to write
     }
 
    if ( nwrite > 0 ){
@@ -292,21 +213,21 @@ void zseb::lzss::inflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32
         else // copy (lenth, distance)
         {
             size_lzss += ZSEB_HIST_BIT + CHAR_BIT + 1U; // 1-bit differentiator
-            const uint16_t distance = dist_pack[idx] + ZSEB_DIST_SHIFT;
-            const uint16_t length   = llen_pack[idx] + ZSEB_LENGTH_SHIFT;
+            const uint16_t distance = dist_pack[idx] + zseb::lz77::DIS_SHIFT;
+            const uint16_t length   = llen_pack[idx] + zseb::lz77::LEN_SHIFT;
             for (uint32_t cnt = 0U; cnt < length; ++cnt)
                 frame[rd_current + cnt] = frame[rd_current - distance + cnt];
             rd_current += length;
             std::cout << "[" << distance << ", " << length << "]" << std::endl;
         }
 
-        if (rd_current >= ZSEB_TRIGGER)
+        if (rd_current >= zseb::lz77::DISK_TRIGGER)
         {
-            file.write(frame, ZSEB_HIST_SIZE);
-            checksum = crc32::update(checksum, frame, ZSEB_HIST_SIZE);
-            for (uint32_t cnt = 0; cnt < rd_current - ZSEB_HIST_SIZE; ++cnt)
-                frame[cnt] = frame[ZSEB_HIST_SIZE + cnt];
-            rd_current -= ZSEB_HIST_SIZE;
+            file.write(frame, zseb::lz77::HIST_SIZE);
+            checksum = crc32::update(checksum, frame, zseb::lz77::HIST_SIZE);
+            for (uint32_t cnt = 0; cnt < rd_current - zseb::lz77::HIST_SIZE; ++cnt)
+                frame[cnt] = frame[zseb::lz77::HIST_SIZE + cnt];
+            rd_current -= zseb::lz77::HIST_SIZE;
         }
     }
     std::cout << "==========================================================================================" << std::endl;
@@ -320,7 +241,7 @@ bool zseb::lzss::deflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32
     uint16_t longest_len1;
     uint32_t hash_entry = 0;
 
-    if (rd_current + ZSEB_LENGTH_SHIFT <= rd_end)
+    if (rd_current + zseb::lz77::LEN_SHIFT <= rd_end)
     {
         hash_entry =                            static_cast<uint8_t>(frame[rd_current    ]);
         hash_entry = (hash_entry << CHAR_BIT) | static_cast<uint8_t>(frame[rd_current + 1]);
@@ -328,12 +249,12 @@ bool zseb::lzss::deflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32
     }
 
     // Obtain an upper_limit for rd_current, so that the current processed block does not exceed 32K
-    //const uint32_t limit1 = rd_shift + rd_current == 0 ? ZSEB_HIST_SIZE : ZSEB_TRIGGER;
-    const uint32_t limit1 = ZSEB_TRIGGER;
+    //const uint32_t limit1 = rd_shift + rd_current == 0 ? zseb::lz77::HIST_SIZE : zseb::lz77::DISK_TRIGGER;
+    const uint32_t limit1 = zseb::lz77::DISK_TRIGGER;
     const uint32_t limit2 = rd_end;
     const uint32_t upper_limit = limit2 < limit1 ? limit2 : limit1;
 
-    while (rd_current < upper_limit) // Inside: rd_current < ZSEB_TRIGGER = 65536
+    while (rd_current < upper_limit) // Inside: rd_current < zseb::lz77::DISK_TRIGGER = 65536
     {
         if (longest_len0 == 1)
         {
@@ -342,60 +263,44 @@ bool zseb::lzss::deflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32
         }
         else
         {
-            longest_ptr0 = hash_head[hash_entry] > rd_shift ? static_cast<uint16_t>(hash_head[hash_entry] - rd_shift) : 0;
-            std::tie(longest_ptr0, longest_len0) = lzss_match(frame, longest_ptr0, rd_current, /*upper_limit*/rd_end - rd_current, hash_prv3,
-#ifndef GZIP_BEST
-                hash_prvx
-#else
-                GZIP_MAX_LENGTH
-#endif
-                );
+            longest_ptr0 = pos_diff(hash_head[hash_entry], rd_shift); // hash_head[hash_entry] > rd_shift ? static_cast<uint16_t>(hash_head[hash_entry] - rd_shift) : 0;
+            std::tie(longest_ptr0, longest_len0) = zseb::lz77::match(frame, longest_ptr0, rd_current, /*upper_limit*/rd_end - rd_current, hash_prv3, zseb::lz77::GZIP_CHAIN);
         }
 
         __move_hash__(hash_entry); // Update of hash_prv3, hash_head, rd_current, hash_entry
         { // Lazy evaluation candidate
-            longest_ptr1 = hash_head[hash_entry] > rd_shift ? static_cast<uint16_t>(hash_head[ hash_entry ] - rd_shift) : 0;
-            std::tie(longest_ptr1, longest_len1) = lzss_match(frame, longest_ptr1, rd_current, /*upper_limit*/rd_end - rd_current, hash_prv3,
-#ifndef GZIP_BEST
-                hash_prvx
-#else
-                (longest_len0 >= GZIP_GOOD_LENGTH) ? GZIP_MAX_LENGTH >> 2 : GZIP_MAX_LENGTH
-#endif
-                );
+            longest_ptr1 = pos_diff(hash_head[hash_entry], rd_shift); // hash_head[hash_entry] > rd_shift ? static_cast<uint16_t>(hash_head[ hash_entry ] - rd_shift) : 0;
+            std::tie(longest_ptr1, longest_len1) = zseb::lz77::match(frame, longest_ptr1, rd_current, /*upper_limit*/rd_end - rd_current, hash_prv3,
+                (longest_len0 >= zseb::lz77::GZIP_GOOD) ? zseb::lz77::GZIP_CHAIN >> 2 : zseb::lz77::GZIP_CHAIN);
         }
 
-        if ((longest_ptr0 == ZSEB_HASH_STOP) || (longest_len1 > longest_len0))
+        if ((longest_ptr0 == zseb::lz77::HASH_STOP) || (longest_len1 > longest_len0))
         { // lazy evaluation
             __append_lit_encode__(llen_pack, dist_pack, wr_current);
             longest_len0 = 1;
         }
         else
         {
-            const uint16_t dist_shft = static_cast<uint16_t>(rd_current - (1 + longest_ptr0 + ZSEB_DIST_SHIFT));
-            const uint8_t   len_shft = static_cast<uint8_t>(longest_len0 - ZSEB_LENGTH_SHIFT);
+            const uint16_t dist_shft = static_cast<uint16_t>(rd_current - (1 + longest_ptr0 + zseb::lz77::DIS_SHIFT));
+            const uint8_t   len_shft = static_cast<uint8_t>(longest_len0 - zseb::lz77::LEN_SHIFT);
             __append_len_encode__( llen_pack, dist_pack, wr_current, dist_shft, len_shft );
         }
 
-#ifndef GZIP_BEST
-        for (uint16_t cnt = 1; cnt < longest_len0 - 1; ++cnt){ hash_prvx[(rd_current + cnt) & ZSEB_HIST_MASK] = ZSEB_HASH_STOP; }
-#endif
-        for (uint16_t cnt = 1; cnt < longest_len0;     ++cnt){ __move_hash__(hash_entry); }
+        for (uint16_t cnt = 1; cnt < longest_len0; ++cnt){ __move_hash__(hash_entry); }
     }
 
-    if ( rd_current >= ZSEB_TRIGGER )
+    if ( rd_current >= zseb::lz77::DISK_TRIGGER )
     {
-        for (uint32_t cnt = 0U; cnt < rd_end - ZSEB_HIST_SIZE; ++cnt)
-            frame[ cnt ] = frame[ ZSEB_HIST_SIZE + cnt ];
-        rd_shift   += ZSEB_HIST_SIZE;
-        rd_end     -= ZSEB_HIST_SIZE;
-        rd_current -= ZSEB_HIST_SIZE;
+        for (uint32_t cnt = 0U; cnt < rd_end - zseb::lz77::HIST_SIZE; ++cnt)
+            frame[ cnt ] = frame[ zseb::lz77::HIST_SIZE + cnt ];
+        rd_shift   += zseb::lz77::HIST_SIZE;
+        rd_end     -= zseb::lz77::HIST_SIZE;
+        rd_current -= zseb::lz77::HIST_SIZE;
 
         __readin__();
 
-        for (uint16_t cnt = 0; cnt < ZSEB_HIST_SIZE; ++cnt){ hash_prv3[cnt] = hash_prv3[cnt] > ZSEB_HIST_SIZE ? hash_prv3[cnt] ^ ZSEB_HIST_SIZE : 0; }
-#ifndef GZIP_BEST
-        for (uint16_t cnt = 0; cnt < ZSEB_HIST_SIZE; ++cnt){ hash_prvx[cnt] = hash_prvx[cnt] > ZSEB_HIST_SIZE ? hash_prvx[cnt] ^ ZSEB_HIST_SIZE : 0; }
-#endif
+        for (uint16_t cnt = 0; cnt < zseb::lz77::HIST_SIZE; ++cnt)
+            hash_prv3[cnt] = hash_prv3[cnt] > zseb::lz77::HIST_SIZE ? hash_prv3[cnt] ^ zseb::lz77::HIST_SIZE : 0;
     }
 
     if (rd_end > rd_current)
@@ -408,7 +313,7 @@ bool zseb::lzss::deflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32
 
 void zseb::lzss::__readin__()
 {
-    const uint32_t current_read = rd_shift + ZSEB_FRAME > size_file ? size_file - rd_shift - rd_end : ZSEB_FRAME - rd_end;
+    const uint32_t current_read = rd_shift + zseb::lz77::FRAME_SIZE > size_file ? size_file - rd_shift - rd_end : zseb::lz77::FRAME_SIZE - rd_end;
     file.read(frame + rd_end, current_read);
     checksum = crc32::update( checksum, frame + rd_end, current_read );
     rd_end += current_read;
@@ -416,10 +321,10 @@ void zseb::lzss::__readin__()
 
 void zseb::lzss::__move_hash__(uint32_t &hash_entry)
 {
-    hash_prv3[rd_current & ZSEB_HIST_MASK] = hash_head[hash_entry] > rd_shift ? static_cast<uint16_t>(hash_head[hash_entry] - rd_shift) : 0U;
+    hash_prv3[rd_current & zseb::lz77::HIST_MASK] = hash_head[hash_entry] > rd_shift ? static_cast<uint16_t>(hash_head[hash_entry] - rd_shift) : 0U;
     hash_head[hash_entry] = rd_shift + rd_current; // rd_current always < 2**16 upon set
     ++rd_current;
-    hash_entry = ( static_cast<uint8_t>( frame[ rd_current + 2 ] ) ) | ( ( hash_entry << CHAR_BIT ) & ZSEB_HASH_MASK );
+    hash_entry = ( static_cast<uint8_t>( frame[ rd_current + 2 ] ) ) | ( ( hash_entry << CHAR_BIT ) & zseb::lz77::HASH_MASK );
 }
 
 void zseb::lzss::__append_lit_encode__(uint8_t * llen_pack, uint16_t * dist_pack, uint32_t &wr_current)
@@ -427,7 +332,7 @@ void zseb::lzss::__append_lit_encode__(uint8_t * llen_pack, uint16_t * dist_pack
     size_lzss += CHAR_BIT + 1; // 1-bit differentiator
 
     llen_pack[wr_current] = static_cast<uint8_t>(frame[rd_current - 1]); // [ 0 : 255 ]
-    dist_pack[wr_current] = ZSEB_MASK_16T;
+    dist_pack[wr_current] = UINT16_MAX;
 
     ++wr_current;
 }
