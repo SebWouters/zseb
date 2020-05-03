@@ -95,6 +95,17 @@ constexpr std::pair<uint16_t, uint16_t> match(const char * window, const uint32_
     return { result_ptr, result_len };
 }
 
+constexpr uint32_t update(uint64_t * head, uint16_t * prev, const char * window, const uint64_t shift, const uint32_t current, const uint32_t key) noexcept
+{
+    prev[current & HIST_MASK] = pos_diff(head[key], shift);
+    head[key] = shift + current;
+    return static_cast<uint8_t>(window[current + 3]) | ((key << CHAR_BIT) & HASH_MASK);
+}
+
+
+
+
+
 } // End of namespace lz77
 } // End of namespace zseb
 
@@ -258,16 +269,20 @@ bool zseb::lzss::deflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32
         }
         else
         {
+            //hash_entry = zseb::lz77::update(hash_head, hash_prv3, frame, rd_shift, rd_current, hash_entry);
             hash_prv3[rd_current & zseb::lz77::HIST_MASK] = pos_diff(hash_head[hash_entry], rd_shift);
             // GZIP has runway == rd_end - rd_current (for parallelization perhaps upper_limit - rd_current better)
-            std::tie(longest_ptr0, longest_len0) = zseb::lz77::match(frame, rd_current, rd_end - rd_current, hash_prv3);
+            std::tie(longest_ptr0, longest_len0) = zseb::lz77::match(frame, rd_current, /*rd_end*/upper_limit - rd_current, hash_prv3);
         }
 
-        __move_hash__(hash_entry); // Update of hash_prv3, hash_head, rd_current, hash_entry
+        //__move_hash__(hash_entry); // Update of hash_prv3, hash_head, rd_current, hash_entry
+        hash_entry = zseb::lz77::update(hash_head, hash_prv3, frame, rd_shift, rd_current, hash_entry);
+        ++rd_current;
         { // Lazy evaluation candidate
+            //hash_entry = zseb::lz77::update(hash_head, hash_prv3, frame, rd_shift, rd_current, hash_entry);
             hash_prv3[rd_current & zseb::lz77::HIST_MASK] = pos_diff(hash_head[hash_entry], rd_shift);
             // GZIP has runway == rd_end - rd_current (for parallelization perhaps upper_limit - rd_current better)
-            std::tie(longest_ptr1, longest_len1) = zseb::lz77::match(frame, rd_current, rd_end - rd_current, hash_prv3);
+            std::tie(longest_ptr1, longest_len1) = zseb::lz77::match(frame, rd_current, /*rd_end*/upper_limit - rd_current, hash_prv3);
         }
 
         if ((longest_ptr0 == zseb::lz77::HASH_STOP) || (longest_len1 > longest_len0))
@@ -286,9 +301,21 @@ bool zseb::lzss::deflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32
             llen_pack[wr_current] = static_cast<uint8_t>(longest_len0 - zseb::lz77::LEN_SHIFT);  // [ 0 : 255 ]
             dist_pack[wr_current] = static_cast<uint16_t>(rd_current - (1 + longest_ptr0 + zseb::lz77::DIS_SHIFT)); // [ 0 : 32767 ]
             ++wr_current;
+            //++rd_current;
         }
 
-        for (uint16_t cnt = 1; cnt < longest_len0; ++cnt){ __move_hash__(hash_entry); }
+        //for (uint16_t cnt = 1; cnt < longest_len0; ++cnt){ __move_hash__(hash_entry); }
+        //for (uint16_t cnt = 2; cnt < longest_len0; ++cnt)
+        //{
+        //    hash_entry = zseb::lz77::update(hash_head, hash_prv3, frame, rd_shift, rd_current, hash_entry);
+        //    ++rd_current;
+        //}
+        for (uint16_t cnt = 1; cnt < longest_len0; ++cnt)
+        {
+            assert(UINT16_MAX >= pos_diff(hash_head[hash_entry], rd_shift)); // requires upper_limit - rd_current above
+            hash_entry = zseb::lz77::update(hash_head, hash_prv3, frame, rd_shift, rd_current, hash_entry);
+            ++rd_current;
+        }
     }
 
     if ( rd_current >= zseb::lz77::DISK_TRIGGER )
@@ -322,13 +349,13 @@ void zseb::lzss::__readin__()
     rd_end += current_read;
 }
 
-void zseb::lzss::__move_hash__(uint32_t &hash_entry)
-{
-    hash_prv3[rd_current & zseb::lz77::HIST_MASK] = pos_diff(hash_head[hash_entry], rd_shift); // hash_head[hash_entry] > rd_shift ? static_cast<uint16_t>(hash_head[hash_entry] - rd_shift) : 0U;
-    hash_head[hash_entry] = rd_shift + rd_current; // rd_current always < 2**16 upon set
-    ++rd_current;
-    hash_entry = ( static_cast<uint8_t>( frame[ rd_current + 2 ] ) ) | ( ( hash_entry << CHAR_BIT ) & zseb::lz77::HASH_MASK );
-}
+//void zseb::lzss::__move_hash__(uint32_t &hash_entry)
+//{
+//    hash_prv3[rd_current & zseb::lz77::HIST_MASK] = pos_diff(hash_head[hash_entry], rd_shift); // hash_head[hash_entry] > rd_shift ? static_cast<uint16_t>(hash_head[hash_entry] - rd_shift) : 0U;
+//    hash_head[hash_entry] = rd_shift + rd_current; // rd_current always < 2**16 upon set
+//    ++rd_current;
+//    hash_entry = ( static_cast<uint8_t>( frame[ rd_current + 2 ] ) ) | ( ( hash_entry << CHAR_BIT ) & zseb::lz77::HASH_MASK );
+//}
 
 //void zseb::lzss::__append_lit_encode__(uint8_t * llen_pack, uint16_t * dist_pack, uint32_t &wr_current)
 //{

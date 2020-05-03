@@ -81,7 +81,7 @@ namespace zseb{
 
          void __readin__();
 
-         inline void __move_hash__( uint32_t &hash_entry ); // Update hash_prv3, hash_head, rd_current and hash_entry
+         //inline void __move_hash__( uint32_t &hash_entry ); // Update hash_prv3, hash_head, rd_current and hash_entry
 
          //inline void __append_lit_encode__( uint8_t * llen_pack, uint16_t * dist_pack, uint32_t &wr_current );
 
