@@ -39,26 +39,27 @@ constexpr const uint32_t HASH_STOP    = 0;
 constexpr const uint32_t TOO_FAR      = 4096; // Discard matches of length 3 if further than TOO_FAR
 
 // Memory-related parameters; note that GZIP works with a frame of 65536 and shifts over 32768 whenever insufficient lookahead (258 + 3 + 1)
-constexpr const uint32_t DISK_TRIGGER = 2 * HIST_SIZE;
+constexpr const uint32_t DISK_TRIGGER = 3 * HIST_SIZE;
 constexpr const uint32_t FRAME_SIZE   = DISK_TRIGGER + 272;
+constexpr const uint32_t DISK_SHIFT   = DISK_TRIGGER - HIST_SIZE;
 
-constexpr std::pair<uint16_t, uint16_t> match(const char * window, const uint32_t current, const uint32_t runway, const uint16_t * prev) noexcept
+constexpr std::pair<uint32_t, uint16_t> match(const char * window, const uint32_t current, const uint32_t runway, const /*uint16_t*/uint32_t * prev) noexcept
 {
     const uint16_t max_len = std::min(MAX_MATCH, runway);
-    const uint16_t ptr_lim = pos_diff(current, HIST_SIZE);
+    const uint32_t ptr_lim = pos_diff(current, HIST_SIZE);
     if (max_len < LEN_SHIFT)
         return { HASH_STOP, 1 };
 
     const char * cutoff = window + current + max_len;
 
-    uint16_t result_ptr = HASH_STOP;
+    uint32_t result_ptr = HASH_STOP;
     uint16_t result_len = 1;
 
-    uint16_t ptr = prev[current & HIST_MASK]; // ptr == current & HIST_SIZE implies ptr = current - HIST_SIZE <= ptr_lim
+    uint32_t ptr = prev[current & HIST_MASK]; // ptr == current & HIST_SIZE implies ptr = current - HIST_SIZE <= ptr_lim
 
     while (ptr > ptr_lim)
     {
-        assert((ptr & HIST_MASK) != (current & HIST_MASK));
+        //assert((ptr & HIST_MASK) != (current & HIST_MASK));
 
         const char * present = window + current + result_len;
         const char * history = window + ptr     + result_len;
@@ -95,7 +96,7 @@ constexpr std::pair<uint16_t, uint16_t> match(const char * window, const uint32_
     return { result_ptr, result_len };
 }
 
-constexpr uint32_t update(uint64_t * head, uint16_t * prev, const char * window, const uint64_t shift, const uint32_t current, const uint32_t key) noexcept
+constexpr uint32_t update(uint64_t * head, /*uint16_t **/ uint32_t * prev, const char * window, const uint64_t shift, const uint32_t current, const uint32_t key) noexcept
 {
     prev[current & HIST_MASK] = pos_diff(head[key], shift);
     head[key] = shift + current;
@@ -124,7 +125,8 @@ zseb::lzss::lzss( std::string fullfile, const zseb_modus modus ){
    rd_current = 0;
    frame     = NULL;
    hash_head = NULL;
-   hash_prv3 = NULL;
+   //hash_prv3 = NULL;
+    prev = nullptr;
 
    if ( modus == zseb_modus::zip ){
 
@@ -139,9 +141,11 @@ zseb::lzss::lzss( std::string fullfile, const zseb_modus modus ){
             for (uint32_t cnt = 0; cnt < zseb::lz77::FRAME_SIZE; ++cnt){ frame[ cnt ] = 0U; } // Because match check can go up to 4 beyond rd_end
 
          hash_head = new uint64_t[ zseb::lz77::HASH_SIZE ];
-         hash_prv3 = new uint16_t[ zseb::lz77::HIST_SIZE ];
+         //hash_prv3 = new uint16_t[ zseb::lz77::HIST_SIZE ];
+         prev = new uint32_t[zseb::lz77::HIST_SIZE];
          for (uint32_t cnt = 0; cnt < zseb::lz77::HASH_SIZE; ++cnt){ hash_head[ cnt ] = zseb::lz77::HASH_STOP; }
-         for (uint32_t cnt = 0; cnt < zseb::lz77::HIST_SIZE; ++cnt){ hash_prv3[ cnt ] = zseb::lz77::HASH_STOP; }
+         //for (uint32_t cnt = 0; cnt < zseb::lz77::HIST_SIZE; ++cnt){ hash_prv3[ cnt ] = zseb::lz77::HASH_STOP; }
+         for (uint32_t cnt = 0; cnt < zseb::lz77::HIST_SIZE; ++cnt){ prev[cnt] = zseb::lz77::HASH_STOP; }
 
          __readin__(); // Get ready for work
 
@@ -168,7 +172,8 @@ zseb::lzss::~lzss()
     if (file.is_open()){ file.close(); }
     if (frame     != NULL){ delete [] frame;     }
     if (hash_head != NULL){ delete [] hash_head; }
-    if (hash_prv3 != NULL){ delete [] hash_prv3; }
+    //if (hash_prv3 != NULL){ delete [] hash_prv3; }
+    if (prev != nullptr) { delete [] prev; }
 }
 
 void zseb::lzss::flush()
@@ -233,10 +238,10 @@ void zseb::lzss::inflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32
 
         if (rd_current >= zseb::lz77::DISK_TRIGGER)
         {
-            file.write(frame, zseb::lz77::HIST_SIZE);
-            checksum = crc32::update(checksum, frame, zseb::lz77::HIST_SIZE);
-            for (uint32_t cnt = 0; cnt < rd_current - zseb::lz77::HIST_SIZE; ++cnt)
-                frame[cnt] = frame[zseb::lz77::HIST_SIZE + cnt];
+            file.write(frame, zseb::lz77::DISK_SHIFT);
+            checksum = crc32::update(checksum, frame, zseb::lz77::DISK_SHIFT);
+            for (uint32_t cnt = 0; cnt < rd_current - zseb::lz77::DISK_SHIFT; ++cnt)
+                frame[cnt] = frame[zseb::lz77::DISK_SHIFT + cnt];
             rd_current -= zseb::lz77::HIST_SIZE;
         }
     }
@@ -245,9 +250,9 @@ void zseb::lzss::inflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32
 
 bool zseb::lzss::deflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current)
 {
-    uint16_t longest_ptr0;
+    uint32_t longest_ptr0;
     uint16_t longest_len0 = 3; // No reuse of ( ptr1, len1 ) data initially
-    uint16_t longest_ptr1;
+    uint32_t longest_ptr1;
     uint16_t longest_len1;
     uint32_t hash_entry = 0;
 
@@ -270,19 +275,19 @@ bool zseb::lzss::deflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32
         else
         {
             //hash_entry = zseb::lz77::update(hash_head, hash_prv3, frame, rd_shift, rd_current, hash_entry);
-            hash_prv3[rd_current & zseb::lz77::HIST_MASK] = pos_diff(hash_head[hash_entry], rd_shift);
+            /*hash_prv3*/prev[rd_current & zseb::lz77::HIST_MASK] = pos_diff(hash_head[hash_entry], rd_shift);
             // GZIP has runway == rd_end - rd_current (for parallelization perhaps upper_limit - rd_current better)
-            std::tie(longest_ptr0, longest_len0) = zseb::lz77::match(frame, rd_current, /*rd_end*/upper_limit - rd_current, hash_prv3);
+            std::tie(longest_ptr0, longest_len0) = zseb::lz77::match(frame, rd_current, rd_end/*upper_limit*/ - rd_current, /*hash_prv3*/prev);
         }
 
         //__move_hash__(hash_entry); // Update of hash_prv3, hash_head, rd_current, hash_entry
-        hash_entry = zseb::lz77::update(hash_head, hash_prv3, frame, rd_shift, rd_current, hash_entry);
+        hash_entry = zseb::lz77::update(hash_head, /*hash_prv3*/prev, frame, rd_shift, rd_current, hash_entry);
         ++rd_current;
         { // Lazy evaluation candidate
             //hash_entry = zseb::lz77::update(hash_head, hash_prv3, frame, rd_shift, rd_current, hash_entry);
-            hash_prv3[rd_current & zseb::lz77::HIST_MASK] = pos_diff(hash_head[hash_entry], rd_shift);
+            /*hash_prv3*/prev[rd_current & zseb::lz77::HIST_MASK] = pos_diff(hash_head[hash_entry], rd_shift);
             // GZIP has runway == rd_end - rd_current (for parallelization perhaps upper_limit - rd_current better)
-            std::tie(longest_ptr1, longest_len1) = zseb::lz77::match(frame, rd_current, /*rd_end*/upper_limit - rd_current, hash_prv3);
+            std::tie(longest_ptr1, longest_len1) = zseb::lz77::match(frame, rd_current, rd_end/*upper_limit*/ - rd_current, /*hash_prv3*/prev);
         }
 
         if ((longest_ptr0 == zseb::lz77::HASH_STOP) || (longest_len1 > longest_len0))
@@ -304,41 +309,41 @@ bool zseb::lzss::deflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32
             //++rd_current;
         }
 
-        //for (uint16_t cnt = 1; cnt < longest_len0; ++cnt){ __move_hash__(hash_entry); }
-        //for (uint16_t cnt = 2; cnt < longest_len0; ++cnt)
-        //{
-        //    hash_entry = zseb::lz77::update(hash_head, hash_prv3, frame, rd_shift, rd_current, hash_entry);
-        //    ++rd_current;
-        //}
         for (uint16_t cnt = 1; cnt < longest_len0; ++cnt)
         {
-            assert(UINT16_MAX >= pos_diff(hash_head[hash_entry], rd_shift)); // requires upper_limit - rd_current above
-            hash_entry = zseb::lz77::update(hash_head, hash_prv3, frame, rd_shift, rd_current, hash_entry);
+            //assert(UINT16_MAX >= pos_diff(hash_head[hash_entry], rd_shift)); // !!! for uint16_t * hash_prv3 --> requires upper_limit - rd_current above
+            hash_entry = zseb::lz77::update(hash_head, /*hash_prv3*/ prev, frame, rd_shift, rd_current, hash_entry);
             ++rd_current;
         }
     }
 
     if ( rd_current >= zseb::lz77::DISK_TRIGGER )
     {
-        for (uint32_t cnt = 0U; cnt < rd_end - zseb::lz77::HIST_SIZE; ++cnt)
-            frame[ cnt ] = frame[ zseb::lz77::HIST_SIZE + cnt ];
+        for (uint32_t cnt = 0U; cnt < rd_end - zseb::lz77::DISK_SHIFT; ++cnt)
+            frame[ cnt ] = frame[ zseb::lz77::DISK_SHIFT + cnt ];
         //std::copy(frame + zseb::lz77::HIST_SIZE, frame + rd_end, frame); // std::copy not guaranteed for overlapping pieces
-        rd_shift   += zseb::lz77::HIST_SIZE;
-        rd_end     -= zseb::lz77::HIST_SIZE;
-        rd_current -= zseb::lz77::HIST_SIZE;
+        rd_shift   += zseb::lz77::DISK_SHIFT;
+        rd_end     -= zseb::lz77::DISK_SHIFT;
+        rd_current -= zseb::lz77::DISK_SHIFT;
 
         __readin__();
 
         for (uint16_t cnt = 0; cnt < zseb::lz77::HIST_SIZE; ++cnt)
-            hash_prv3[cnt] = hash_prv3[cnt] > zseb::lz77::HIST_SIZE ? hash_prv3[cnt] ^ zseb::lz77::HIST_SIZE : 0;
+            //hash_prv3[cnt] = hash_prv3[cnt] > zseb::lz77::HIST_SIZE ? hash_prv3[cnt] ^ zseb::lz77::HIST_SIZE : 0;
+            prev[cnt] = pos_diff(prev[cnt], zseb::lz77::DISK_SHIFT);
     }
 
-    if (rd_end > rd_current)
-    {
-        assert(wr_current <= size_pack);
-        return false; // Not yet last block
-    }
-    return true; // Last block
+    //std::cout << "first = " << (rd_shift + rd_current == size_file) << std::endl;
+    //std::cout << "2nd   = " << file.eof() << std::endl;
+    //assert((rd_shift + rd_current == size_file) == file.eof());
+    return rd_shift + rd_current == size_file;
+
+    //if (rd_end > rd_current)
+    //{
+    //    assert(wr_current <= size_pack);
+    //    return false; // Not yet last block
+    //}
+    //return true; // Last block
 }
 
 void zseb::lzss::__readin__()
@@ -349,31 +354,4 @@ void zseb::lzss::__readin__()
     rd_end += current_read;
 }
 
-//void zseb::lzss::__move_hash__(uint32_t &hash_entry)
-//{
-//    hash_prv3[rd_current & zseb::lz77::HIST_MASK] = pos_diff(hash_head[hash_entry], rd_shift); // hash_head[hash_entry] > rd_shift ? static_cast<uint16_t>(hash_head[hash_entry] - rd_shift) : 0U;
-//    hash_head[hash_entry] = rd_shift + rd_current; // rd_current always < 2**16 upon set
-//    ++rd_current;
-//    hash_entry = ( static_cast<uint8_t>( frame[ rd_current + 2 ] ) ) | ( ( hash_entry << CHAR_BIT ) & zseb::lz77::HASH_MASK );
-//}
-
-//void zseb::lzss::__append_lit_encode__(uint8_t * llen_pack, uint16_t * dist_pack, uint32_t &wr_current)
-//{
-//    size_lzss += CHAR_BIT + 1; // 1-bit differentiator
-//
-//    llen_pack[wr_current] = static_cast<uint8_t>(frame[rd_current - 1]); // [ 0 : 255 ]
-//    dist_pack[wr_current] = UINT16_MAX;
-//
-//    ++wr_current;
-//}
-
-//void zseb::lzss::__append_len_encode__(uint8_t * llen_pack, uint16_t * dist_pack, uint32_t &wr_current, const uint16_t dist_shift, const uint8_t len_shift)
-//{
-//    size_lzss += ZSEB_HIST_BIT + CHAR_BIT + 1U; // 1-bit differentiator
-//
-//    llen_pack[wr_current] = len_shift;  // [ 0 : 255 ]
-//    dist_pack[wr_current] = dist_shift; // [ 0 : 32767 ]
-//
-//    ++wr_current;
-//}
 

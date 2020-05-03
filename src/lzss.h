@@ -75,7 +75,8 @@ namespace zseb{
 
          uint64_t * hash_head; // hash_head['abc'] = hash_head[ c + 256 * ( b + 256 * a ) ] = file idx of latest encounter
 
-         uint16_t * hash_prv3; // hash_prv3[ idx ] = idx' = frame idx of encounter before idx with same 3 chars (length ZSEB_HIST_SIZE)
+         //uint16_t * hash_prv3; // hash_prv3[ idx ] = idx' = frame idx of encounter before idx with same 3 chars (length ZSEB_HIST_SIZE)
+         uint32_t * prev;
 
          /***  Functions  ***/
 
