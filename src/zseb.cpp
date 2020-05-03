@@ -138,7 +138,7 @@ std::string zseb::zseb::strip_preamble(){
    const bool FNAME    = ( ( ( FLG >> 3 ) & 1U ) == 1U );
    const bool FEXTRA   = ( ( ( FLG >> 2 ) & 1U ) == 1U );
    const bool FHCRC    = ( ( ( FLG >> 1 ) & 1U ) == 1U );
-   const bool FTEXT    = ( (   FLG        & 1U ) == 1U );
+ //const bool FTEXT    = ( (   FLG        & 1U ) == 1U );
    /* MTIME */ zipfile->read( temp, 4 ); crc16 = crc32::update( crc16, temp, 4 ); mtime = stream::str2int( temp, 4 );
    /* XFL   */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
    /* OS    */ zipfile->read( &var, 1 ); crc16 = crc32::update( crc16, &var, 1 );
@@ -204,7 +204,7 @@ void zseb::zseb::zip()
         gettimeofday( &start, NULL );
         while ((!last_block) && (wr_current < ZSEB_BLOCK_SIZE))
             last_block = flate->deflate( llen_pack, dist_pack, ZSEB_ARRAY_SIZE, wr_current );
-        const uint32_t huffman_size = wr_current < ZSEB_BLOCK_SIZE ? wr_current : ZSEB_BLOCK_SIZE;
+        const uint32_t huffman_size = std::min(wr_current, ZSEB_BLOCK_SIZE);// ? wr_current : ZSEB_BLOCK_SIZE;
         gettimeofday( &end, NULL );
         time_lzss += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 

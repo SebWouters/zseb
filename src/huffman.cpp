@@ -674,7 +674,7 @@ uint16_t zseb::huffman::__prefix_lengths__( uint16_t * stat, const uint16_t size
 
    if ( overflow > 0 ){
 
-      std::cerr << "zseb: Warning: Huffman tree bit lengths larger than allowed." << std::endl;
+      //std::cerr << "zseb: Warning: Huffman tree bit lengths larger than allowed." << std::endl;
 
       assert( ( overflow % 2 ) == 0 );
 
@@ -746,9 +746,9 @@ uint16_t zseb::huffman::__prefix_lengths__( uint16_t * stat, const uint16_t size
       if ( ( tree[ root ].info != 0 ) || ( total_freq != tree[ root ].data ) ){
          std::cerr << "zseb: Warning: Huffman tree bit lengths readjustment failed." << std::endl;
          exit( 255 );
-      } else {
+      } /*else {
          std::cerr << "zseb: Warning: Huffman tree bit lengths succesfully readjusted." << std::endl;
-      }
+      }*/
 
    }
 
