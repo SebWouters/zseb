@@ -307,7 +307,7 @@ void zseb::zseb::unzip(){
             std::cerr << "zseb: Block type X00: NLEN != ( ~LEN )" << std::endl;
             exit( 255 );
          }
-            std::cout << "Block form X00 (uncompressed) with size " << LEN << std::endl;
+            //std::cout << "Block form X00 (uncompressed) with size " << LEN << std::endl;
          flate->copy( zipfile, LEN );
 
       } else {
@@ -315,10 +315,10 @@ void zseb::zseb::unzip(){
          gettimeofday( &start, NULL );
          if ( block_form == 2 ){ // Dynamic trees
             coder->load_tree( zipfile );
-            std::cout << "Block form X10 (dynamic tree)";
+            //std::cout << "Block form X10 (dynamic tree)";
          } else { // block_form == 1 ---> Fixed trees
             coder->fixed_tree( 'I' );
-            std::cout << "Block form X01 (fixed tree)";
+            //std::cout << "Block form X01 (fixed tree)";
          }
          gettimeofday( &end, NULL );
          time_huff += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
@@ -344,7 +344,7 @@ void zseb::zseb::unzip(){
             wr_current = 0;
 
          }
-            std::cout << " with size " << lzss_block_size << std::endl;
+            //std::cout << " with size " << lzss_block_size << std::endl;
       }
    }
 
