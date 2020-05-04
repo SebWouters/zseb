@@ -64,7 +64,7 @@ constexpr const uint32_t table[UINT8_MAX + 1] =
   0xb3667a2eU, 0xc4614ab8U, 0x5d681b02U, 0x2a6f2b94U, 0xb40bbe37U, 0xc30c8ea1U, 0x5a05df1bU, 0x2d02ef8dU
 };
 
-
+/*
 constexpr uint32_t entry(uint32_t value) noexcept
 {
     constexpr const uint32_t crc32reverse = 0xedb88320U;
@@ -79,7 +79,7 @@ constexpr uint32_t entry(uint32_t value) noexcept
 
     return value;
 }
-
+*/
 
 constexpr uint32_t update(const uint32_t crc, const char * data, const uint32_t length) noexcept
 {

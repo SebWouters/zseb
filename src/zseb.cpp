@@ -26,7 +26,7 @@
 #include <unistd.h>
 
 #include "zseb.h"
-#include "crc32.h"
+#include "crc32.hpp"
 
 zseb::zseb::zseb( std::string packfile, const zseb_modus modus, const bool verbose ){
 

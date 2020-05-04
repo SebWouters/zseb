@@ -40,6 +40,7 @@ enum zseb_modus
     unzip
 };
 
+/*
 void pos_diff( uint8_t left,  uint8_t right);
 void pos_diff( uint8_t left, uint16_t right);
 void pos_diff( uint8_t left, uint32_t right);
@@ -60,6 +61,7 @@ void pos_diff(uint64_t left, uint32_t right);
 constexpr uint16_t pos_diff(uint16_t left, uint16_t right) noexcept { return left > right ? left - right : 0; }
 constexpr uint32_t pos_diff(uint32_t left, uint32_t right) noexcept { return left > right ? left - right : 0; }
 constexpr uint64_t pos_diff(uint64_t left, uint64_t right) noexcept { return left > right ? left - right : 0; }
+*/
 
 } // End of namespace zseb
 
