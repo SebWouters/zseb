@@ -33,7 +33,8 @@ constexpr const uint32_t LEN_SHIFT    = 3;
 constexpr const uint32_t DIS_SHIFT    = 1;
 constexpr const uint32_t HIST_SIZE    = 32768; // 2^15
 constexpr const uint32_t HIST_MASK    = HIST_SIZE - 1;
-constexpr const uint32_t HASH_SIZE    = 16777216; // 256^3
+constexpr const uint32_t HASH_SHFT    = 5;
+constexpr const uint32_t HASH_SIZE    = 1U << (3 * HASH_SHFT);// 16777216; // 256^3
 constexpr const uint32_t HASH_MASK    = HASH_SIZE - 1;
 constexpr const uint32_t HASH_STOP    = 0;
 constexpr const uint32_t TOO_FAR      = 4096; // Discard matches of length 3 if further than TOO_FAR
@@ -43,7 +44,7 @@ constexpr const uint32_t DISK_TRIGGER = 4 * HIST_SIZE;
 constexpr const uint32_t FRAME_SIZE   = DISK_TRIGGER + 272;
 constexpr const uint32_t DISK_SHIFT   = DISK_TRIGGER - HIST_SIZE;
 
-constexpr std::pair<uint32_t, uint16_t> match(const char * window, const uint32_t current, const uint32_t runway, const /*uint16_t*/uint32_t * prev) noexcept
+constexpr std::pair<uint32_t, uint16_t> match(const char * window, const uint32_t current, const uint32_t runway, const uint32_t * prev) noexcept
 {
     const uint16_t max_len = std::min(MAX_MATCH, runway);
     const uint32_t ptr_lim = pos_diff(current, HIST_SIZE);
@@ -59,18 +60,20 @@ constexpr std::pair<uint32_t, uint16_t> match(const char * window, const uint32_
 
     while (ptr > ptr_lim)
     {
-        //assert((ptr & HIST_MASK) != (current & HIST_MASK));
-
-        const char * present = window + current + result_len;
-        const char * history = window + ptr     + result_len;
-        if ((*history != *present) || (*(--history) != *(--present)))
+        const char * present = window + current;
+        const char * history = window + ptr;
+        // If hash_key equal and first two characters equal --> third must be equal as well
+        if ((history[0] != present[0]) ||
+            (history[1] != present[1]) ||
+            (history[result_len] != present[result_len]) ||
+            (history[result_len - 1] != present[result_len - 1]))
         {
             ptr = prev[ptr & HIST_MASK];
             continue;
         }
 
-        present = window + current + 2;
-        history = window + ptr     + 2;
+        present += 2;
+        history += 2;
 
         do {} while ((*(++history) == *(++present)) && (*(++history) == *(++present)) &&
                      (*(++history) == *(++present)) && (*(++history) == *(++present)) &&
@@ -96,14 +99,13 @@ constexpr std::pair<uint32_t, uint16_t> match(const char * window, const uint32_
     return { result_ptr, result_len };
 }
 
-constexpr uint32_t update(uint64_t * head, /*uint16_t **/ uint32_t * prev, const char * window, const uint64_t shift, const uint32_t current, const uint32_t key) noexcept
+// Live with hash collisions
+constexpr uint32_t update(const uint32_t key, const char next) noexcept
 {
-    prev[current & HIST_MASK] = pos_diff(head[key], shift);
-    head[key] = shift + current;
-    return static_cast<uint8_t>(window[current + 3]) | ((key << CHAR_BIT) & HASH_MASK);
+    return ((key << HASH_SHFT) ^ static_cast<uint8_t>(next)) & HASH_MASK;
 }
 
-constexpr uint32_t prepare(const char * window, const uint32_t start, const uint32_t end, uint32_t * prev, uint64_t * head)
+constexpr uint32_t prepare(const char * window, const uint32_t start, const uint32_t end, uint32_t * prev, uint32_t * head) noexcept
 {
     for (uint32_t cnt = 0; cnt < HIST_SIZE; ++cnt) { prev[cnt] = HASH_STOP; }
     for (uint32_t cnt = 0; cnt < HASH_SIZE; ++cnt) { head[cnt] = HASH_STOP; }
@@ -111,30 +113,26 @@ constexpr uint32_t prepare(const char * window, const uint32_t start, const uint
     uint32_t key = 0;
     if (start + LEN_SHIFT <= end)
     {
-        key =                     static_cast<uint8_t>(window[0]);
-        key = (key << CHAR_BIT) | static_cast<uint8_t>(window[1]);
-        key = (key << CHAR_BIT) | static_cast<uint8_t>(window[2]);
+        key = update(0,   window[0]);
+        key = update(key, window[1]);
+        key = update(key, window[2]);
 
         for (uint32_t cnt = 0; cnt < start; ++cnt)
         {
             prev[cnt] = head[key]; // Idea: prev = array of pointers?
             head[key] = cnt;       // Idea: head = array of pointers?
-            key = ((key << CHAR_BIT) & HASH_MASK) | static_cast<uint8_t>(window[cnt + 3]);
+            key = update(key, window[cnt + 3]);
         }
     }
     return key;
 }
 
 
-std::pair<uint32_t, uint64_t> deflate(const char * window, const uint32_t start, const uint32_t end, uint32_t * prev, uint64_t * head, uint8_t * llen_pack, uint16_t * dist_pack) noexcept
+constexpr std::pair<uint32_t, uint64_t> deflate(const char * window, const uint32_t start, const uint32_t end, uint32_t * prev, uint32_t * head, uint8_t * llen_pack, uint16_t * dist_pack) noexcept
 {
-//    assert(start == 0 || start == HIST_SIZE);
-
     uint32_t key = prepare(window, start, end, prev, head);
     uint32_t pck = 0;
 
-    //std::pair<uint32_t, uint16_t> now = { HASH_STOP, 3 }; // No reuse of nxt initially
-    //std::pair<uint32_t, uint16_t> nxt = { HASH_STOP, 0 };
     uint32_t now_ptr = HASH_STOP;
     uint16_t now_len = 3;
     uint32_t nxt_ptr = HASH_STOP;
@@ -154,15 +152,19 @@ std::pair<uint32_t, uint64_t> deflate(const char * window, const uint32_t start,
         else
         {
             prev[current & HIST_MASK] = head[key];
-            std::tie(now_ptr, now_len) = match(window, current, end - current, prev); // End - current: do not peek beyond current frame!
+            std::pair<uint32_t, uint16_t> now_res = match(window, current, end - current, prev); // End - current: do not peek beyond current frame!
+            now_ptr = now_res.first;
+            now_len = now_res.second;
         }
 
         prev[current & HIST_MASK] = head[key];
         head[key] = current;
-        key = ((key << CHAR_BIT) & HASH_MASK) | static_cast<uint8_t>(window[current + 3]);
+        key = update(key, window[current + 3]);
         ++current;
         prev[current & HIST_MASK] = head[key];
-        std::tie(nxt_ptr, nxt_len) = match(window, current, end - current, prev); // End - current: do not peek beyond current frame!
+        std::pair<uint32_t, uint16_t> nxt_res = match(window, current, end - current, prev); // End - current: do not peek beyond current frame!
+        nxt_ptr = nxt_res.first;
+        nxt_len = nxt_res.second;
 
         if ((now_ptr == HASH_STOP) || (nxt_len > now_len))
         {
@@ -184,7 +186,7 @@ std::pair<uint32_t, uint64_t> deflate(const char * window, const uint32_t start,
         {
             prev[current & HIST_MASK] = head[key];
             head[key] = current;
-            key = ((key << CHAR_BIT) & HASH_MASK) | static_cast<uint8_t>(window[current + 3]);
+            key = update(key, window[current + 3]);
             ++current;
         }
     }
@@ -203,20 +205,19 @@ std::pair<uint32_t, uint64_t> deflate(const char * window, const uint32_t start,
 
 
 
-zseb::lzss::lzss( std::string fullfile, const zseb_modus modus ){
+zseb::lzss::lzss(std::string fullfile, const zseb_modus modus)
+{
+    assert(modus != zseb_modus::undefined);
 
-   assert(modus != zseb_modus::undefined);
-
-   size_lzss = 0;
-   size_file = 0;
-   checksum  = 0;
-   rd_shift  = 0;
-   rd_end    = 0;
-   rd_current = 0;
-   frame     = NULL;
-   hash_head = NULL;
-   //hash_prv3 = NULL;
-    prev = nullptr;
+    size_lzss = 0;
+    size_file = 0;
+    checksum  = 0;
+    rd_shift  = 0;
+    rd_end    = 0;
+    rd_current = 0;
+    frame = nullptr;
+    head  = nullptr;
+    prev  = nullptr;
 
    if ( modus == zseb_modus::zip ){
 
@@ -230,11 +231,9 @@ zseb::lzss::lzss( std::string fullfile, const zseb_modus modus ){
             frame = new char[zseb::lz77::FRAME_SIZE];
             for (uint32_t cnt = 0; cnt < zseb::lz77::FRAME_SIZE; ++cnt){ frame[ cnt ] = 0U; } // Because match check can go up to 4 beyond rd_end
 
-         hash_head = new uint64_t[ zseb::lz77::HASH_SIZE ];
-         //hash_prv3 = new uint16_t[ zseb::lz77::HIST_SIZE ];
+         head = new uint32_t[zseb::lz77::HASH_SIZE];
          prev = new uint32_t[zseb::lz77::HIST_SIZE];
-         for (uint32_t cnt = 0; cnt < zseb::lz77::HASH_SIZE; ++cnt){ hash_head[ cnt ] = zseb::lz77::HASH_STOP; }
-         //for (uint32_t cnt = 0; cnt < zseb::lz77::HIST_SIZE; ++cnt){ hash_prv3[ cnt ] = zseb::lz77::HASH_STOP; }
+         for (uint32_t cnt = 0; cnt < zseb::lz77::HASH_SIZE; ++cnt){ head[cnt] = zseb::lz77::HASH_STOP; }
          for (uint32_t cnt = 0; cnt < zseb::lz77::HIST_SIZE; ++cnt){ prev[cnt] = zseb::lz77::HASH_STOP; }
 
          __readin__(); // Get ready for work
@@ -261,8 +260,7 @@ zseb::lzss::~lzss()
 {
     if (file.is_open()){ file.close(); }
     if (frame     != NULL){ delete [] frame;     }
-    if (hash_head != NULL){ delete [] hash_head; }
-    //if (hash_prv3 != NULL){ delete [] hash_prv3; }
+    if (head != nullptr) { delete [] head; }
     if (prev != nullptr) { delete [] prev; }
 }
 
@@ -340,16 +338,9 @@ void zseb::lzss::inflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32
 
 bool zseb::lzss::deflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current)
 {
-    return deflate3(llen_pack, dist_pack, size_pack, wr_current);
-}
-
-bool zseb::lzss::deflate3(uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current)
-{
-    //uint32_t pack_add;
-    //uint64_t lzss_add;
     const uint32_t start = (rd_shift + rd_current == 0) ? 0 : zseb::lz77::HIST_SIZE;
     const uint32_t limit = std::min(rd_end, zseb::lz77::DISK_TRIGGER);
-    std::pair<uint32_t, uint64_t> result = zseb::lz77::deflate(frame, start, limit, prev, hash_head, llen_pack + wr_current, dist_pack + wr_current);
+    std::pair<uint32_t, uint64_t> result = zseb::lz77::deflate(frame, start, limit, prev, head, llen_pack + wr_current, dist_pack + wr_current);
     rd_current = limit;
     if ( rd_current == zseb::lz77::DISK_TRIGGER )
     {
@@ -367,109 +358,8 @@ bool zseb::lzss::deflate3(uint8_t * llen_pack, uint16_t * dist_pack, const uint3
     assert(wr_current <= size_pack);
     size_lzss += result.second;
 
-    //std::cout << "first = " << (rd_shift + rd_current == size_file) << std::endl;
-    //std::cout << "2nd   = " << file.eof() << std::endl;
-    //assert((rd_shift + rd_current == size_file) == file.eof());
     return rd_shift + rd_current == size_file;
 
-}
-
-bool zseb::lzss::deflate2(uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current)
-{
-    uint32_t longest_ptr0;
-    uint16_t longest_len0 = 3; // No reuse of ( ptr1, len1 ) data initially
-    uint32_t longest_ptr1;
-    uint16_t longest_len1;
-    uint32_t hash_entry = 0;
-
-    if (rd_current + zseb::lz77::LEN_SHIFT <= rd_end)
-    {
-        hash_entry =                            static_cast<uint8_t>(frame[rd_current    ]);
-        hash_entry = (hash_entry << CHAR_BIT) | static_cast<uint8_t>(frame[rd_current + 1]);
-        hash_entry = (hash_entry << CHAR_BIT) | static_cast<uint8_t>(frame[rd_current + 2]);
-    }
-
-    const uint32_t upper_limit = std::min(rd_end, zseb::lz77::DISK_TRIGGER);
-
-    while (rd_current < upper_limit)
-    {
-        if (longest_len0 == 1)
-        {
-            longest_ptr0 = longest_ptr1;
-            longest_len0 = longest_len1;
-        }
-        else
-        {
-            //hash_entry = zseb::lz77::update(hash_head, hash_prv3, frame, rd_shift, rd_current, hash_entry);
-            /*hash_prv3*/prev[rd_current & zseb::lz77::HIST_MASK] = pos_diff(hash_head[hash_entry], rd_shift);
-            // GZIP has runway == rd_end - rd_current (for parallelization perhaps upper_limit - rd_current better)
-            std::tie(longest_ptr0, longest_len0) = zseb::lz77::match(frame, rd_current, rd_end/*upper_limit*/ - rd_current, /*hash_prv3*/prev);
-        }
-
-        //__move_hash__(hash_entry); // Update of hash_prv3, hash_head, rd_current, hash_entry
-        hash_entry = zseb::lz77::update(hash_head, /*hash_prv3*/prev, frame, rd_shift, rd_current, hash_entry);
-        ++rd_current;
-        { // Lazy evaluation candidate
-            //hash_entry = zseb::lz77::update(hash_head, hash_prv3, frame, rd_shift, rd_current, hash_entry);
-            /*hash_prv3*/prev[rd_current & zseb::lz77::HIST_MASK] = pos_diff(hash_head[hash_entry], rd_shift);
-            // GZIP has runway == rd_end - rd_current (for parallelization perhaps upper_limit - rd_current better)
-            std::tie(longest_ptr1, longest_len1) = zseb::lz77::match(frame, rd_current, rd_end/*upper_limit*/ - rd_current, /*hash_prv3*/prev);
-        }
-
-        if ((longest_ptr0 == zseb::lz77::HASH_STOP) || (longest_len1 > longest_len0))
-        { // lazy evaluation
-            //__append_lit_encode__(llen_pack, dist_pack, wr_current);
-            size_lzss += CHAR_BIT + 1; // 1-bit differentiator
-            llen_pack[wr_current] = static_cast<uint8_t>(frame[rd_current - 1]); // [ 0 : 255 ]
-            dist_pack[wr_current] = UINT16_MAX;
-            ++wr_current;
-            longest_len0 = 1;
-        }
-        else
-        {
-            //__append_len_encode__( llen_pack, dist_pack, wr_current, dist_shft, len_shft );
-            size_lzss += ZSEB_HIST_BIT + CHAR_BIT + 1U; // 1-bit differentiator
-            llen_pack[wr_current] = static_cast<uint8_t>(longest_len0 - zseb::lz77::LEN_SHIFT);  // [ 0 : 255 ]
-            dist_pack[wr_current] = static_cast<uint16_t>(rd_current - (1 + longest_ptr0 + zseb::lz77::DIS_SHIFT)); // [ 0 : 32767 ]
-            ++wr_current;
-            //++rd_current;
-        }
-
-        for (uint16_t cnt = 1; cnt < longest_len0; ++cnt)
-        {
-            //assert(UINT16_MAX >= pos_diff(hash_head[hash_entry], rd_shift)); // !!! for uint16_t * hash_prv3 --> requires upper_limit - rd_current above
-            hash_entry = zseb::lz77::update(hash_head, /*hash_prv3*/ prev, frame, rd_shift, rd_current, hash_entry);
-            ++rd_current;
-        }
-    }
-
-    if ( rd_current >= zseb::lz77::DISK_TRIGGER )
-    {
-        for (uint32_t cnt = 0U; cnt < rd_end - zseb::lz77::DISK_SHIFT; ++cnt)
-            frame[ cnt ] = frame[ zseb::lz77::DISK_SHIFT + cnt ];
-        //std::copy(frame + zseb::lz77::HIST_SIZE, frame + rd_end, frame); // std::copy not guaranteed for overlapping pieces
-        rd_shift   += zseb::lz77::DISK_SHIFT;
-        rd_end     -= zseb::lz77::DISK_SHIFT;
-        rd_current -= zseb::lz77::DISK_SHIFT;
-
-        __readin__();
-
-        for (uint16_t cnt = 0; cnt < zseb::lz77::HIST_SIZE; ++cnt)
-            //hash_prv3[cnt] = hash_prv3[cnt] > zseb::lz77::HIST_SIZE ? hash_prv3[cnt] ^ zseb::lz77::HIST_SIZE : 0;
-            prev[cnt] = pos_diff(prev[cnt], zseb::lz77::DISK_SHIFT);
-    }
-
-    //std::cout << "first = " << (rd_shift + rd_current == size_file) << std::endl;
-    //std::cout << "2nd   = " << file.eof() << std::endl;
-    //assert((rd_shift + rd_current == size_file) == file.eof());
-    return rd_shift + rd_current == size_file;
-
-    //if (rd_end > rd_current)
-    //{
-    //    assert(wr_current <= size_pack);
-    //    return false; // Not yet last block
-    //}
-    //return true; // Last block
 }
 
 void zseb::lzss::__readin__()

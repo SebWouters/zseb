@@ -36,13 +36,9 @@ namespace zseb{
 
          virtual ~lzss();
 
-         // Following returns "Last block?"; on input wr_current is reset to zero; on output wr_current is #elem in *_pack; max(wr_current) <= size_pack + 4
-         bool deflate2( uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current );
-         bool deflate3( uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current );
-
          bool deflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t& wr_current);
 
-         void inflate( uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack );
+         void inflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack);
 
          void flush();
 
@@ -76,20 +72,13 @@ namespace zseb{
 
          /***  Hash table  ***/
 
-         uint64_t * hash_head; // hash_head['abc'] = hash_head[ c + 256 * ( b + 256 * a ) ] = file idx of latest encounter
+         uint32_t * head; // hash_head['abc'] = hash_head[ c + 256 * ( b + 256 * a ) ] = file idx of latest encounter
 
-         //uint16_t * hash_prv3; // hash_prv3[ idx ] = idx' = frame idx of encounter before idx with same 3 chars (length ZSEB_HIST_SIZE)
          uint32_t * prev;
 
          /***  Functions  ***/
 
          void __readin__();
-
-         //inline void __move_hash__( uint32_t &hash_entry ); // Update hash_prv3, hash_head, rd_current and hash_entry
-
-         //inline void __append_lit_encode__( uint8_t * llen_pack, uint16_t * dist_pack, uint32_t &wr_current );
-
-         //inline void __append_len_encode__( uint8_t * llen_pack, uint16_t * dist_pack, uint32_t &wr_current, const uint16_t dist_shift, const uint8_t len_shift );
 
          /***  CRC32 ***/
 
