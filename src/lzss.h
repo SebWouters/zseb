@@ -37,7 +37,10 @@ namespace zseb{
          virtual ~lzss();
 
          // Following returns "Last block?"; on input wr_current is reset to zero; on output wr_current is #elem in *_pack; max(wr_current) <= size_pack + 4
-         bool deflate( uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current );
+         bool deflate2( uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current );
+         bool deflate3( uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current );
+
+         bool deflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t& wr_current);
 
          void inflate( uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack );
 

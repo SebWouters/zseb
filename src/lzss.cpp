@@ -39,7 +39,7 @@ constexpr const uint32_t HASH_STOP    = 0;
 constexpr const uint32_t TOO_FAR      = 4096; // Discard matches of length 3 if further than TOO_FAR
 
 // Memory-related parameters; note that GZIP works with a frame of 65536 and shifts over 32768 whenever insufficient lookahead (258 + 3 + 1)
-constexpr const uint32_t DISK_TRIGGER = 3 * HIST_SIZE;
+constexpr const uint32_t DISK_TRIGGER = 4 * HIST_SIZE;
 constexpr const uint32_t FRAME_SIZE   = DISK_TRIGGER + 272;
 constexpr const uint32_t DISK_SHIFT   = DISK_TRIGGER - HIST_SIZE;
 
@@ -102,6 +102,96 @@ constexpr uint32_t update(uint64_t * head, /*uint16_t **/ uint32_t * prev, const
     head[key] = shift + current;
     return static_cast<uint8_t>(window[current + 3]) | ((key << CHAR_BIT) & HASH_MASK);
 }
+
+constexpr uint32_t prepare(const char * window, const uint32_t start, const uint32_t end, uint32_t * prev, uint64_t * head)
+{
+    for (uint32_t cnt = 0; cnt < HIST_SIZE; ++cnt) { prev[cnt] = HASH_STOP; }
+    for (uint32_t cnt = 0; cnt < HASH_SIZE; ++cnt) { head[cnt] = HASH_STOP; }
+
+    uint32_t key = 0;
+    if (start + LEN_SHIFT <= end)
+    {
+        key =                     static_cast<uint8_t>(window[0]);
+        key = (key << CHAR_BIT) | static_cast<uint8_t>(window[1]);
+        key = (key << CHAR_BIT) | static_cast<uint8_t>(window[2]);
+
+        for (uint32_t cnt = 0; cnt < start; ++cnt)
+        {
+            prev[cnt] = head[key]; // Idea: prev = array of pointers?
+            head[key] = cnt;       // Idea: head = array of pointers?
+            key = ((key << CHAR_BIT) & HASH_MASK) | static_cast<uint8_t>(window[cnt + 3]);
+        }
+    }
+    return key;
+}
+
+
+std::pair<uint32_t, uint64_t> deflate(const char * window, const uint32_t start, const uint32_t end, uint32_t * prev, uint64_t * head, uint8_t * llen_pack, uint16_t * dist_pack) noexcept
+{
+//    assert(start == 0 || start == HIST_SIZE);
+
+    uint32_t key = prepare(window, start, end, prev, head);
+    uint32_t pck = 0;
+
+    //std::pair<uint32_t, uint16_t> now = { HASH_STOP, 3 }; // No reuse of nxt initially
+    //std::pair<uint32_t, uint16_t> nxt = { HASH_STOP, 0 };
+    uint32_t now_ptr = HASH_STOP;
+    uint16_t now_len = 3;
+    uint32_t nxt_ptr = HASH_STOP;
+    uint16_t nxt_len = 0;
+
+    uint32_t current = start;
+
+    uint64_t lzss = 0;
+
+    while (current < end)
+    {
+        if (now_len == 1)
+        {
+            now_len = nxt_len;
+            now_ptr = nxt_ptr;
+        }
+        else
+        {
+            prev[current & HIST_MASK] = head[key];
+            std::tie(now_ptr, now_len) = match(window, current, end - current, prev); // End - current: do not peek beyond current frame!
+        }
+
+        prev[current & HIST_MASK] = head[key];
+        head[key] = current;
+        key = ((key << CHAR_BIT) & HASH_MASK) | static_cast<uint8_t>(window[current + 3]);
+        ++current;
+        prev[current & HIST_MASK] = head[key];
+        std::tie(nxt_ptr, nxt_len) = match(window, current, end - current, prev); // End - current: do not peek beyond current frame!
+
+        if ((now_ptr == HASH_STOP) || (nxt_len > now_len))
+        {
+            lzss += CHAR_BIT + 1;
+            llen_pack[pck] = static_cast<uint8_t>(window[current - 1]);
+            dist_pack[pck] = UINT16_MAX;
+            ++pck;
+            now_len = 1;
+        }
+        else
+        {
+            lzss += ZSEB_HIST_BIT + CHAR_BIT + 1;
+            llen_pack[pck] = static_cast<uint8_t>(now_len - LEN_SHIFT);
+            dist_pack[pck] = static_cast<uint16_t>(current - (1 + now_ptr + DIS_SHIFT));
+            ++pck;
+        }
+
+        for (uint16_t cnt = 1; cnt < now_len; ++cnt)
+        {
+            prev[current & HIST_MASK] = head[key];
+            head[key] = current;
+            key = ((key << CHAR_BIT) & HASH_MASK) | static_cast<uint8_t>(window[current + 3]);
+            ++current;
+        }
+    }
+
+    return { pck, lzss };
+}
+
 
 
 
@@ -242,13 +332,49 @@ void zseb::lzss::inflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32
             checksum = crc32::update(checksum, frame, zseb::lz77::DISK_SHIFT);
             for (uint32_t cnt = 0; cnt < rd_current - zseb::lz77::DISK_SHIFT; ++cnt)
                 frame[cnt] = frame[zseb::lz77::DISK_SHIFT + cnt];
-            rd_current -= zseb::lz77::HIST_SIZE;
+            rd_current -= zseb::lz77::DISK_SHIFT;
         }
     }
     //std::cout << "==========================================================================================" << std::endl;
 }
 
 bool zseb::lzss::deflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current)
+{
+    return deflate3(llen_pack, dist_pack, size_pack, wr_current);
+}
+
+bool zseb::lzss::deflate3(uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current)
+{
+    //uint32_t pack_add;
+    //uint64_t lzss_add;
+    const uint32_t start = (rd_shift + rd_current == 0) ? 0 : zseb::lz77::HIST_SIZE;
+    const uint32_t limit = std::min(rd_end, zseb::lz77::DISK_TRIGGER);
+    std::pair<uint32_t, uint64_t> result = zseb::lz77::deflate(frame, start, limit, prev, hash_head, llen_pack + wr_current, dist_pack + wr_current);
+    rd_current = limit;
+    if ( rd_current == zseb::lz77::DISK_TRIGGER )
+    {
+        for (uint32_t cnt = 0U; cnt < rd_end - zseb::lz77::DISK_SHIFT; ++cnt)
+            frame[ cnt ] = frame[ zseb::lz77::DISK_SHIFT + cnt ];
+        //std::copy(frame + zseb::lz77::HIST_SIZE, frame + rd_end, frame); // std::copy not guaranteed for overlapping pieces
+        rd_shift   += zseb::lz77::DISK_SHIFT;
+        rd_end     -= zseb::lz77::DISK_SHIFT;
+        rd_current -= zseb::lz77::DISK_SHIFT;
+
+        __readin__();
+    }
+
+    wr_current += result.first;
+    assert(wr_current <= size_pack);
+    size_lzss += result.second;
+
+    //std::cout << "first = " << (rd_shift + rd_current == size_file) << std::endl;
+    //std::cout << "2nd   = " << file.eof() << std::endl;
+    //assert((rd_shift + rd_current == size_file) == file.eof());
+    return rd_shift + rd_current == size_file;
+
+}
+
+bool zseb::lzss::deflate2(uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current)
 {
     uint32_t longest_ptr0;
     uint16_t longest_len0 = 3; // No reuse of ( ptr1, len1 ) data initially
