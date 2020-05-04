@@ -32,8 +32,17 @@
 #define ZSEB_BLOCK_SIZE 32767U // GZIP packs in blocks of 32767
 #define ZSEB_ARRAY_SIZE 98304U
 
-namespace zseb{
-
+namespace zseb
+{
+namespace tools
+{
+    uint32_t write_header(const std::string& bigfile, stream * zipfile);
+    std::pair<std::string, uint32_t> read_header(stream * zipfile);
+    void set_time(std::string filename, const uint32_t mtime);
+    void zip(lzss * flate, stream * zipfile, const bool print);
+    void unzip(lzss * flate, stream * zipfile, const bool print);
+}
+/*
    class zseb{
 
       public:
@@ -58,22 +67,14 @@ namespace zseb{
 
          lzss * flate;
 
-         huffman * coder;
-
          stream * zipfile;
-
-         uint8_t * llen_pack; // Length ZSEB_WR_FRAME; contains lit_code OR len_shift ( packing happens later )
-
-         uint16_t * dist_pack; // Length ZSEB_WR_FRAME; contains dist_shift [ 0 : 32767 ] with 65535 means literal
-
-         uint32_t wr_current;  // Currently validly filled length of llen_pack and dist_pack
 
          bool print;
 
          uint32_t mtime;
 
    };
-
+*/
 }
 
 

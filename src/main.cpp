@@ -134,23 +134,38 @@ int main(int argc, char ** argv)
     if (modus == zseb::zseb_modus::zip)
     {
         if (name){ outfile = infile + ".gz"; }
-        zseb::zseb zipper(outfile, zseb::zseb_modus::zip, print);
-        zipper.write_preamble(infile);
-        zipper.setup_flate(infile, zseb::zseb_modus::zip);
-        zipper.zip();
-        zipper.set_time(outfile);
+        //zseb::zseb zipper(outfile, zseb::zseb_modus::zip, print);
+        zseb::stream * zipfile = new zseb::stream(outfile, 'W');
+        //zipper.write_preamble(infile);
+        const uint32_t mtime = zseb::tools::write_header(infile, zipfile);
+        zseb::lzss * flate = new zseb::lzss(infile, zseb::zseb_modus::zip);
+        //zipper.setup_flate(infile, zseb::zseb_modus::zip);
+        //zipper.zip();
+        zseb::tools::zip(flate, zipfile, print);
+        delete zipfile;
+        delete flate;
+        zseb::tools::set_time(outfile, mtime);
+        //zipper.set_time(outfile);
     }
 
     if (modus == zseb::zseb_modus::unzip)
     {
-        zseb::zseb unzipper(infile, zseb::zseb_modus::unzip, print);
-        std::string origname = unzipper.strip_preamble();
-        if (name){ outfile = origname; }
-        unzipper.setup_flate(outfile, zseb::zseb_modus::unzip);
-        unzipper.unzip();
-        unzipper.set_time(outfile);
+        //zseb::zseb unzipper(infile, zseb::zseb_modus::unzip, print);
+        zseb::stream * zipfile = new zseb::stream(infile, 'R');
+        //std::string origname = unzipper.strip_preamble();
+        std::pair<std::string, uint32_t> orignametime = zseb::tools::read_header(zipfile);
+        if (name){ outfile = orignametime.first; }
+        //unzipper.setup_flate(outfile, zseb::zseb_modus::unzip);
+        zseb::lzss * flate = new zseb::lzss(outfile, zseb::zseb_modus::unzip);
+        //unzipper.unzip();
+        zseb::tools::unzip(flate, zipfile, print);
+        delete zipfile;
+        delete flate;
+        //unzipper.set_time(outfile);
+        zseb::tools::set_time(outfile, orignametime.second);
     }
 
     return 0;
 }
+
 
