@@ -36,10 +36,13 @@ namespace zseb
 namespace tools
 {
 
-constexpr const uint32_t DISK_TRIGGER = 4 * lz77::HIST_SIZE;
-constexpr const uint32_t FRAME_SIZE   = DISK_TRIGGER + 272;
-constexpr const uint32_t DISK_SHIFT   = DISK_TRIGGER - lz77::HIST_SIZE;
+// Note that GZIP works with a frame of 65536 and shifts over 32768 whenever insufficient lookahead (MIN_LOOKAHEAD = 258 + 3 + 1)
+constexpr const uint32_t BATCH_SIZE   = 4 * lz77::HIST_SIZE;
+constexpr const uint32_t DISK_TRIGGER = BATCH_SIZE + lz77::HIST_SIZE;
+constexpr const uint32_t FRAME_EXTRA  = 272;
 
+constexpr const uint32_t ZSEB_BLOCK_SIZE = 32767; // GZIP packs in blocks of 32767
+constexpr const uint32_t ZSEB_ARRAY_SIZE = 98304;
 
 uint32_t write_header(const std::string& bigfile, stream * zipfile)
 {
@@ -186,8 +189,7 @@ void set_time(const std::string& filename, const uint32_t mtime)
 void zip(const std::string& bigfile, const std::string& smallfile, const bool print)
 {
     stream * zipfile = new stream(smallfile, 'W');
-    const uint32_t mtime = zseb::tools::write_header(bigfile, zipfile);
-    //lzss * flate = new lzss(bigfile, zseb::zseb_modus::zip);
+    const uint32_t mtime = write_header(bigfile, zipfile);
     std::ifstream origfile;
     origfile.open(bigfile.c_str(), std::ios::in|std::ios::binary|std::ios::ate);
     if (!origfile.is_open())
@@ -199,22 +201,21 @@ void zip(const std::string& bigfile, const std::string& smallfile, const bool pr
     const uint64_t size_file = static_cast<uint64_t>(origfile.tellg());
     origfile.seekg(0, std::ios::beg);
 
-    char     * frame = new char[FRAME_SIZE];    for (uint32_t cnt = 0; cnt < FRAME_SIZE; ++cnt){ frame[cnt] = 0; }
-    uint32_t * head  = new uint32_t[lz77::HASH_SIZE]; for (uint32_t cnt = 0; cnt < lz77::HASH_SIZE; ++cnt){  head[cnt] = 0; }
-    uint32_t * prev  = new uint32_t[lz77::HIST_SIZE]; for (uint32_t cnt = 0; cnt < lz77::HIST_SIZE; ++cnt){  prev[cnt] = 0; }
+    char * frame = new char[DISK_TRIGGER + FRAME_EXTRA];
+    for (uint32_t cnt = 0; cnt < DISK_TRIGGER + FRAME_EXTRA; ++cnt){ frame[cnt] = 0; }
+    uint32_t * head = new uint32_t[lz77::HASH_SIZE];
+    uint32_t * prev = new uint32_t[lz77::HIST_SIZE];
     uint8_t  * llen_pack = new  uint8_t[ZSEB_ARRAY_SIZE];
     uint16_t * dist_pack = new uint16_t[ZSEB_ARRAY_SIZE];
-    huffman  * coder = new huffman();
+    huffman * coder = new huffman();
 
     uint32_t checksum   = 0;
     uint64_t rd_shift   = 0;
-    uint32_t rd_end     = 0;
     uint32_t rd_current = 0;
 
-    origfile.read(frame + rd_end, FRAME_SIZE - rd_end);
-    uint32_t current_read = origfile.gcount();
-    checksum = crc32::update(checksum, frame + rd_end, current_read);
-    rd_end += current_read;
+    uint32_t rd_end = BATCH_SIZE > size_file ? size_file : BATCH_SIZE;
+    origfile.read(frame, rd_end);
+    checksum = crc32::update(checksum, frame, rd_end);
 
     uint64_t size_zlib = zipfile->getpos(); // Preamble are full bytes
     uint32_t wr_current = 0;
@@ -232,22 +233,27 @@ void zip(const std::string& bigfile, const std::string& smallfile, const bool pr
         gettimeofday( &start, NULL );
         while ((!last_block) && (wr_current < ZSEB_BLOCK_SIZE))
         {
-            const uint32_t start = (rd_shift + rd_current == 0) ? 0 : zseb::lz77::HIST_SIZE;
-            const uint32_t limit = std::min(rd_end, DISK_TRIGGER);
-            std::pair<uint32_t, uint32_t> result = zseb::lz77::deflate(frame, start, limit, prev, head, llen_pack + wr_current, dist_pack + wr_current);
-            rd_current = limit;
-            if (rd_current == DISK_TRIGGER)
-            {
-                for (uint32_t cnt = 0U; cnt < rd_end - DISK_SHIFT; ++cnt)
-                    frame[ cnt ] = frame[ DISK_SHIFT + cnt ];
-                //std::copy(frame + zseb::lz77::HIST_SIZE, frame + rd_end, frame); // std::copy not guaranteed for overlapping pieces
-                rd_shift   += DISK_SHIFT;
-                rd_end     -= DISK_SHIFT;
-                rd_current -= DISK_SHIFT;
+            // first run: rd_current = 0         & rd_shift = 0 & rd_end = BATCH_SIZE   (except if eof)
+            // other run: rd_current = HIST_SIZE & rd_shift > 0 & rd_end = DISK_TRIGGER (except if eof)
+            std::pair<uint32_t, uint32_t> result = zseb::lz77::deflate(frame, rd_current, rd_end, prev, head, llen_pack + wr_current, dist_pack + wr_current);
+            const uint32_t upper = rd_shift + rd_current == 0 ? BATCH_SIZE : DISK_TRIGGER;
+            rd_current = rd_end;
 
-                origfile.read(frame + rd_end, FRAME_SIZE - rd_end);
-                /*uint32_t*/ current_read = origfile.gcount();
-                checksum = crc32::update(checksum, frame + rd_end, current_read);
+            if (rd_end == upper)
+            {
+                const uint32_t shift = upper - lz77::HIST_SIZE;
+                if (shift != 0)
+                {
+                    assert(rd_end <= 2 * shift); // Requirement for std::copy (which does not allow overlapping pieces)
+                    std::copy(frame + shift, frame + rd_end, frame);
+                }
+                rd_shift  += shift;
+                rd_end     = lz77::HIST_SIZE;
+                rd_current = lz77::HIST_SIZE;
+
+                const uint32_t current_read = rd_shift + DISK_TRIGGER > size_file ? size_file - rd_shift - lz77::HIST_SIZE : BATCH_SIZE;
+                origfile.read(frame + lz77::HIST_SIZE, current_read);
+                checksum = crc32::update(checksum, frame + lz77::HIST_SIZE, current_read);
                 rd_end += current_read;
             }
 
@@ -257,8 +263,8 @@ void zip(const std::string& bigfile, const std::string& smallfile, const bool pr
 
             last_block = rd_shift + rd_current == size_file;
         }
-        //    last_block = flate->deflate( llen_pack, dist_pack, ZSEB_ARRAY_SIZE, wr_current );
-        const uint32_t huffman_size = std::min(wr_current, ZSEB_BLOCK_SIZE);// ? wr_current : ZSEB_BLOCK_SIZE;
+
+        const uint32_t huffman_size = std::min(wr_current, ZSEB_BLOCK_SIZE);
         gettimeofday( &end, NULL );
         time_lzss += ( end.tv_sec - start.tv_sec ) + 1e-6 * ( end.tv_usec - start.tv_usec );
 
@@ -462,64 +468,5 @@ delete coder;
 
 } // End of namespace tools
 } // End of namespace zseb
-
-
-/*zseb::zseb::zseb( std::string packfile, const zseb_modus modus, const bool verbose ){
-
-   assert(modus != zseb_modus::undefined);
-
-   print     = verbose;
-   flate     = NULL;
-   zipfile   = new stream( packfile, ( ( modus == zseb_modus::zip ) ? 'W' : 'R' ) );
-   mtime     = 0;
-
-}
-
-zseb::zseb::~zseb(){
-
-   if ( flate != NULL ){ delete flate; }
-   if ( zipfile != NULL ){ delete zipfile; }
-
-}
-
-void zseb::zseb::setup_flate(std::string bigfile, const zseb_modus modus)
-{
-    flate = new lzss( bigfile, modus );
-}
-
-void zseb::zseb::set_time(std::string filename)
-{
-    tools::set_time(filename, mtime);
-}
-
-void zseb::zseb::write_preamble(std::string bigfile)
-{
-    mtime = tools::write_header(bigfile, zipfile);
-}
-
-std::string zseb::zseb::strip_preamble()
-{
-    std::pair<std::string, uint32_t> result = tools::read_header(zipfile);
-    mtime = result.second;
-    return result.first;
-}
-
-void zseb::zseb::zip()
-{
-    tools::zip(flate, zipfile, print);
-    delete zipfile; // So that file closes...
-    zipfile = NULL;
-    delete flate; // So that file closes...
-    flate = NULL;
-}
-
-void zseb::zseb::unzip()
-{
-    tools::unzip(flate, zipfile, print);
-    delete zipfile;
-    zipfile = NULL;
-    delete flate;
-    flate = NULL;
-}*/
 
 

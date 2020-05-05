@@ -43,7 +43,7 @@ constexpr const uint32_t DISK_SHIFT   = DISK_TRIGGER - HIST_SIZE;
 
 zseb::lzss::lzss(std::string fullfile, const zseb_modus modus)
 {
-    assert(modus != zseb_modus::undefined);
+    assert(modus == zseb_modus::unzip);
 
     size_lzss = 0;
     size_file = 0;
@@ -54,33 +54,6 @@ zseb::lzss::lzss(std::string fullfile, const zseb_modus modus)
     frame = nullptr;
     head  = nullptr;
     prev  = nullptr;
-
-   if ( modus == zseb_modus::zip ){
-
-      file.open( fullfile.c_str(), std::ios::in|std::ios::binary|std::ios::ate );
-
-      if ( file.is_open() ){
-
-         size_file = static_cast<uint64_t>( file.tellg() );
-         file.seekg( 0, std::ios::beg );
-
-            frame = new char[zseb::lz77::FRAME_SIZE];
-            for (uint32_t cnt = 0; cnt < zseb::lz77::FRAME_SIZE; ++cnt){ frame[ cnt ] = 0U; } // Because match check can go up to 4 beyond rd_end
-
-         head = new uint32_t[zseb::lz77::HASH_SIZE];
-         prev = new uint32_t[zseb::lz77::HIST_SIZE];
-         for (uint32_t cnt = 0; cnt < zseb::lz77::HASH_SIZE; ++cnt){ head[cnt] = zseb::lz77::HASH_STOP; }
-         for (uint32_t cnt = 0; cnt < zseb::lz77::HIST_SIZE; ++cnt){ prev[cnt] = zseb::lz77::HASH_STOP; }
-
-         __readin__(); // Get ready for work
-
-      } else {
-
-         std::cerr << "zseb: Unable to open " << fullfile << "." << std::endl;
-         exit( 255 );
-
-      }
-   }
 
    if ( modus == zseb_modus::unzip ){
 
@@ -140,25 +113,14 @@ void zseb::lzss::copy(stream * zipfile, const uint16_t size_copy)
 
 void zseb::lzss::inflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack)
 {
-    for (uint32_t idx = 0U; idx < size_pack; ++idx)
+    uint32_t idx_pack = 0;
+
+    while (idx_pack != size_pack)
     {
-        if (dist_pack[idx] == ZSEB_MASK_16T) // write literal
-        {
-            size_lzss += CHAR_BIT + 1U; // 1-bit differentiator
-            frame[rd_current] = static_cast<char>(llen_pack[idx]);
-            ++rd_current;
-            //std::cout << static_cast<char>(llen_pack[idx]) << std::endl;
-        }
-        else // copy (lenth, distance)
-        {
-            size_lzss += ZSEB_HIST_BIT + CHAR_BIT + 1U; // 1-bit differentiator
-            const uint16_t distance = dist_pack[idx] + zseb::lz77::DIS_SHIFT;
-            const uint16_t length   = llen_pack[idx] + zseb::lz77::LEN_SHIFT;
-            for (uint32_t cnt = 0U; cnt < length; ++cnt)
-                frame[rd_current + cnt] = frame[rd_current - distance + cnt];
-            rd_current += length;
-            //std::cout << "[" << distance << ", " << length << "]" << std::endl;
-        }
+        std::tuple<uint32_t, uint32_t, uint32_t> result = zseb::lz77::inflate(frame, rd_current, zseb::lz77::DISK_TRIGGER, llen_pack, dist_pack, idx_pack, size_pack);
+        rd_current = std::get<0>(result);
+        idx_pack   = std::get<1>(result);
+        size_lzss += std::get<2>(result);
 
         if (rd_current >= zseb::lz77::DISK_TRIGGER)
         {
@@ -169,41 +131,7 @@ void zseb::lzss::inflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32
             rd_current -= zseb::lz77::DISK_SHIFT;
         }
     }
-    //std::cout << "==========================================================================================" << std::endl;
+
 }
-
-/*bool zseb::lzss::deflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current)
-{
-    const uint32_t start = (rd_shift + rd_current == 0) ? 0 : zseb::lz77::HIST_SIZE;
-    const uint32_t limit = std::min(rd_end, zseb::lz77::DISK_TRIGGER);
-    std::pair<uint32_t, uint32_t> result = zseb::lz77::deflate(frame, start, limit, prev, head, llen_pack + wr_current, dist_pack + wr_current);
-    rd_current = limit;
-    if ( rd_current == zseb::lz77::DISK_TRIGGER )
-    {
-        for (uint32_t cnt = 0U; cnt < rd_end - zseb::lz77::DISK_SHIFT; ++cnt)
-            frame[ cnt ] = frame[ zseb::lz77::DISK_SHIFT + cnt ];
-        //std::copy(frame + zseb::lz77::HIST_SIZE, frame + rd_end, frame); // std::copy not guaranteed for overlapping pieces
-        rd_shift   += zseb::lz77::DISK_SHIFT;
-        rd_end     -= zseb::lz77::DISK_SHIFT;
-        rd_current -= zseb::lz77::DISK_SHIFT;
-
-        __readin__();
-    }
-
-    wr_current += result.first;
-    assert(wr_current <= size_pack);
-    size_lzss += result.second;
-
-    return rd_shift + rd_current == size_file;
-
-}*/
-
-/*void zseb::lzss::__readin__()
-{
-    const uint32_t current_read = rd_shift + zseb::lz77::FRAME_SIZE > size_file ? size_file - rd_shift - rd_end : zseb::lz77::FRAME_SIZE - rd_end;
-    file.read(frame + rd_end, current_read);
-    checksum = crc32::update( checksum, frame + rd_end, current_read );
-    rd_end += current_read;
-}*/
 
 
