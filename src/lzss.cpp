@@ -172,7 +172,7 @@ void zseb::lzss::inflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32
     //std::cout << "==========================================================================================" << std::endl;
 }
 
-bool zseb::lzss::deflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current)
+/*bool zseb::lzss::deflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size_pack, uint32_t &wr_current)
 {
     const uint32_t start = (rd_shift + rd_current == 0) ? 0 : zseb::lz77::HIST_SIZE;
     const uint32_t limit = std::min(rd_end, zseb::lz77::DISK_TRIGGER);
@@ -196,14 +196,14 @@ bool zseb::lzss::deflate(uint8_t * llen_pack, uint16_t * dist_pack, const uint32
 
     return rd_shift + rd_current == size_file;
 
-}
+}*/
 
-void zseb::lzss::__readin__()
+/*void zseb::lzss::__readin__()
 {
     const uint32_t current_read = rd_shift + zseb::lz77::FRAME_SIZE > size_file ? size_file - rd_shift - rd_end : zseb::lz77::FRAME_SIZE - rd_end;
     file.read(frame + rd_end, current_read);
     checksum = crc32::update( checksum, frame + rd_end, current_read );
     rd_end += current_read;
-}
+}*/
 
 

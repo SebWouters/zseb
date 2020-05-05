@@ -38,9 +38,9 @@ namespace tools
 {
     uint32_t write_header(const std::string& bigfile, stream * zipfile);
     std::pair<std::string, uint32_t> read_header(stream * zipfile);
-    void set_time(std::string filename, const uint32_t mtime);
-    void zip(lzss * flate, stream * zipfile, const bool print);
-    void unzip(lzss * flate, stream * zipfile, const bool print);
+    void set_time(const std::string& filename, const uint32_t mtime);
+    void zip(const std::string& bigfile, const std::string& smallfile, const bool print);
+    void unzip(const std::string& smallfile, std::string& bigfile, const bool name, const bool print);
 }
 /*
    class zseb{
