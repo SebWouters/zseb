@@ -25,7 +25,7 @@
 
 #include "dtypes.h"
 #include "stream.h"
-#include "lzss.h"
+//#include "lzss.h"
 #include "huffman.h"
 
 namespace zseb
