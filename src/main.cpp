@@ -21,6 +21,7 @@
 
 #include <getopt.h>
 #include <iostream>
+#include <thread>
 
 #include "dtypes.h"
 #include "zseb.h"
@@ -53,6 +54,9 @@ std::cout << "\n"
 "        -p, --print\n"
 "                Print compression and timing.\n"
 "\n"
+"        -t, --threads\n"
+"                Number of threads (default = hardware concurrency).\n"
+"\n"
 "        -v, --version\n"
 "                Print the version.\n"
 "\n"
@@ -71,12 +75,14 @@ int main(int argc, char ** argv)
     bool outset = false;
     bool name = false;
     bool print = false;
+    int num_threads = std::thread::hardware_concurrency();
 
     struct option long_options[] =
     {
         {"zip",     required_argument, 0, 'z'},
         {"unzip",   required_argument, 0, 'u'},
         {"output",  required_argument, 0, 'o'},
+        {"threads", required_argument, 0, 't'},
         {"name",    no_argument,       0, 'n'},
         {"print",   no_argument,       0, 'p'},
         {"version", no_argument,       0, 'v'},
@@ -86,7 +92,7 @@ int main(int argc, char ** argv)
 
     int option_index = 0;
     int c;
-    while ((c = getopt_long(argc, argv, "hvz:u:o:np", long_options, &option_index)) != -1)
+    while ((c = getopt_long(argc, argv, "hvz:u:o:npt:", long_options, &option_index)) != -1)
     {
         switch(c)
         {
@@ -117,6 +123,9 @@ int main(int argc, char ** argv)
             case 'p':
                 print = true;
                 break;
+            case 't':
+                num_threads = atoi(optarg);
+                break;
         }
     }
 
@@ -134,10 +143,17 @@ int main(int argc, char ** argv)
         return 0;
     }
 
+    if ((num_threads <= 0) || (static_cast<uint32_t>(num_threads) > std::thread::hardware_concurrency()))
+    {
+        std::cerr << "zseb: option -t must be positive and at most std::thread::hardware_concurrency() = " << std::thread::hardware_concurrency() << std::endl;
+        print_help();
+        return 0;
+    }
+
     if (modus == zseb::zseb_modus::zip)
     {
         if (name){ outfile = infile + ".gz"; }
-        zseb::tools::zip(/*flate, zipfile,*/infile, outfile, print);
+        zseb::tools::zip(/*flate, zipfile,*/infile, outfile, print, static_cast<uint32_t>(num_threads));
     }
 
     if (modus == zseb::zseb_modus::unzip)

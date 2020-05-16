@@ -27,7 +27,7 @@ namespace zseb
 namespace tools
 {
 
-void zip(const std::string& bigfile, const std::string& smallfile, const bool print);
+void zip(const std::string& bigfile, const std::string& smallfile, const bool print, const uint32_t num_threads);
 
 void unzip(const std::string& smallfile, std::string& bigfile, const bool name, const bool print);
 

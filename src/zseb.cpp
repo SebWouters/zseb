@@ -185,7 +185,7 @@ void set_time(const std::string& filename, const uint32_t mtime)
 }
 
 
-void zip(const std::string& bigfile, const std::string& smallfile, const bool print)
+void zip(const std::string& bigfile, const std::string& smallfile, const bool print, const uint32_t num_threads)
 {
     obstream zipfile(smallfile);
     const uint32_t mtime = write_header(bigfile, zipfile);
@@ -202,12 +202,10 @@ void zip(const std::string& bigfile, const std::string& smallfile, const bool pr
     const uint64_t size_file = static_cast<uint64_t>(origfile.tellg());
     origfile.seekg(0, std::ios::beg);
 
-    const uint32_t num_threads   = std::thread::hardware_concurrency();
-    const uint32_t batch_size2   = num_threads * BATCH_SIZE;
-    const uint32_t disk_trigger2 = batch_size2 + lz77::HIST_SIZE;
-    const uint32_t frame_size    = disk_trigger2 + FRAME_EXTRA;
-    char * frame = new char[frame_size];
-    for (uint32_t cnt = 0; cnt < frame_size; ++cnt){ frame[cnt] = 0; }
+    const uint32_t multi_batch   = num_threads * BATCH_SIZE;
+    const uint32_t multi_trigger = multi_batch + lz77::HIST_SIZE;
+    char * frame = new char[multi_trigger + FRAME_EXTRA];
+    for (uint32_t cnt = 0; cnt < multi_trigger + FRAME_EXTRA; ++cnt){ frame[cnt] = 0; }
 
     std::vector<std::array<uint32_t, lz77::HASH_SIZE>> heads(num_threads);
     std::vector<std::array<uint32_t, lz77::HIST_SIZE>> prevs(num_threads);
@@ -224,7 +222,7 @@ void zip(const std::string& bigfile, const std::string& smallfile, const bool pr
     uint64_t rd_shift   = 0;
     uint32_t rd_current = 0;
 
-    uint32_t rd_end = batch_size2 > size_file ? size_file : batch_size2;
+    uint32_t rd_end = multi_batch > size_file ? size_file : multi_batch;
     origfile.read(frame, rd_end);
     checksum = crc32::update(checksum, frame, rd_end);
 
@@ -257,7 +255,7 @@ void zip(const std::string& bigfile, const std::string& smallfile, const bool pr
             for (std::thread& t : threads)
                 t.join();
             threads.clear();
-            const uint32_t upper = rd_shift + rd_current == 0 ? batch_size2 : disk_trigger2;
+            const uint32_t upper = rd_shift + rd_current == 0 ? multi_batch : multi_trigger;
             rd_current = rd_end;
 
             if (rd_end == upper)
@@ -272,7 +270,7 @@ void zip(const std::string& bigfile, const std::string& smallfile, const bool pr
                 rd_end     = lz77::HIST_SIZE;
                 rd_current = lz77::HIST_SIZE;
 
-                const uint32_t current_read = rd_shift + disk_trigger2 > size_file ? size_file - rd_shift - lz77::HIST_SIZE : batch_size2;
+                const uint32_t current_read = rd_shift + multi_trigger > size_file ? size_file - rd_shift - lz77::HIST_SIZE : multi_batch;
                 origfile.read(frame + lz77::HIST_SIZE, current_read);
                 checksum = crc32::update(checksum, frame + lz77::HIST_SIZE, current_read);
                 rd_end += current_read;
@@ -400,8 +398,8 @@ void unzip(const std::string& smallfile, std::string& bigfile, const bool name, 
             if (write_size != 0)
             {
                 assert(frame.size() >= write_size);
-                origfile.write(&frame[0], write_size);
-                checksum = crc32::update(checksum, &frame[0], write_size);
+                origfile.write(&frame[0], write_size); // TODO
+                checksum = crc32::update(checksum, &frame[0], write_size); // TODO
                 frame.erase(frame.begin(), frame.begin() + write_size);
             }
             frame.insert(frame.end(), LEN, 0);
@@ -428,8 +426,8 @@ void unzip(const std::string& smallfile, std::string& bigfile, const bool name, 
 
                     if (frame.size() >= DISK_TRIGGER)
                     {
-                        origfile.write(&frame[0], BATCH_SIZE);
-                        checksum = crc32::update(checksum, &frame[0], BATCH_SIZE);
+                        origfile.write(&frame[0], BATCH_SIZE); // TODO
+                        checksum = crc32::update(checksum, &frame[0], BATCH_SIZE); // TODO
                         frame.erase(frame.begin(), frame.begin() + BATCH_SIZE);
                     }
                 }
@@ -442,8 +440,8 @@ void unzip(const std::string& smallfile, std::string& bigfile, const bool name, 
     }
 
     // Flush
-    origfile.write(&frame[0], frame.size());
-    checksum = crc32::update(checksum, &frame[0], frame.size());
+    origfile.write(&frame[0], frame.size()); // TODO
+    checksum = crc32::update(checksum, &frame[0], frame.size()); // TODO
     frame.clear();
     const uint64_t size_file = static_cast<uint64_t>(origfile.tellp());
 
