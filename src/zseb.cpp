@@ -24,6 +24,7 @@
 #include <unistd.h>
 #include <utility>
 #include <chrono>
+#include <thread>
 
 #include "zseb.h"
 #include "huffman.h"
@@ -184,12 +185,12 @@ void set_time(const std::string& filename, const uint32_t mtime)
 }
 
 
-
-
 void zip(const std::string& bigfile, const std::string& smallfile, const bool print)
 {
     obstream zipfile(smallfile);
     const uint32_t mtime = write_header(bigfile, zipfile);
+    uint64_t size_zlib = zipfile.pos(); // Preamble are full bytes
+
     std::ifstream origfile;
     origfile.open(bigfile.c_str(), std::ios::in|std::ios::binary|std::ios::ate);
     if (!origfile.is_open())
@@ -201,41 +202,62 @@ void zip(const std::string& bigfile, const std::string& smallfile, const bool pr
     const uint64_t size_file = static_cast<uint64_t>(origfile.tellg());
     origfile.seekg(0, std::ios::beg);
 
-    char * frame = new char[DISK_TRIGGER + FRAME_EXTRA];
-    for (uint32_t cnt = 0; cnt < DISK_TRIGGER + FRAME_EXTRA; ++cnt){ frame[cnt] = 0; }
-    uint32_t * head = new uint32_t[lz77::HASH_SIZE];
-    uint32_t * prev = new uint32_t[lz77::HIST_SIZE];
-    uint8_t  * llen_pack = new  uint8_t[ZSEB_ARRAY_SIZE];
-    uint16_t * dist_pack = new uint16_t[ZSEB_ARRAY_SIZE];
+    const uint32_t num_threads   = std::thread::hardware_concurrency();
+    const uint32_t batch_size2   = num_threads * BATCH_SIZE;
+    const uint32_t disk_trigger2 = batch_size2 + lz77::HIST_SIZE;
+    const uint32_t frame_size    = disk_trigger2 + FRAME_EXTRA;
+    char * frame = new char[frame_size];
+    for (uint32_t cnt = 0; cnt < frame_size; ++cnt){ frame[cnt] = 0; }
+
+    std::vector<std::array<uint32_t, lz77::HASH_SIZE>> heads(num_threads);
+    std::vector<std::array<uint32_t, lz77::HIST_SIZE>> prevs(num_threads);
+    std::vector<std::vector<uint8_t>>  llen_packs(num_threads); for (std::vector<uint8_t>&  llen_pack : llen_packs){ llen_pack.reserve(ZSEB_BLOCK_SIZE); }
+    std::vector<std::vector<uint16_t>> dist_packs(num_threads); for (std::vector<uint16_t>& dist_pack : dist_packs){ dist_pack.reserve(ZSEB_BLOCK_SIZE); }
+    std::vector<uint8_t>  llen_combi; llen_combi.reserve(ZSEB_ARRAY_SIZE);
+    std::vector<uint16_t> dist_combi; dist_combi.reserve(ZSEB_ARRAY_SIZE);
+    std::vector<uint32_t> lzss_parts(num_threads);
+    std::vector<std::thread> threads; threads.reserve(num_threads);
+
     huffman coder;
 
     uint32_t checksum   = 0;
     uint64_t rd_shift   = 0;
     uint32_t rd_current = 0;
 
-    uint32_t rd_end = BATCH_SIZE > size_file ? size_file : BATCH_SIZE;
+    uint32_t rd_end = batch_size2 > size_file ? size_file : batch_size2;
     origfile.read(frame, rd_end);
     checksum = crc32::update(checksum, frame, rd_end);
 
-    uint64_t size_zlib = zipfile.pos(); // Preamble are full bytes
-    uint32_t wr_current = 0;
-
     bool last_block = false;
-    uint32_t block_form;
 
     uint64_t time_lzss = 0.0;
     uint64_t time_huff = 0.0;
 
-    while ((!last_block) || (wr_current > 0))
+    while ((!last_block) || (llen_combi.size() != 0))
     {
         // LZSS a block: gzip packs (llen_pack, dist_pack) blocks of size 32767
         auto start = std::chrono::steady_clock::now();
-        while ((!last_block) && (wr_current < ZSEB_BLOCK_SIZE))
+        while ((!last_block) && (llen_combi.size() < ZSEB_BLOCK_SIZE))
         {
-            // first run: rd_current = 0         & rd_shift = 0 & rd_end = BATCH_SIZE   (except if eof)
-            // other run: rd_current = HIST_SIZE & rd_shift > 0 & rd_end = DISK_TRIGGER (except if eof)
-            std::pair<uint32_t, uint32_t> result = zseb::lz77::deflate(frame, rd_current, rd_end, prev, head, llen_pack + wr_current, dist_pack + wr_current);
-            const uint32_t upper = rd_shift + rd_current == 0 ? BATCH_SIZE : DISK_TRIGGER;
+            for (uint32_t threadID = 0; threadID < num_threads; ++threadID)
+            {
+                const uint32_t offset = rd_current + threadID * BATCH_SIZE;
+                if (offset < rd_end)
+                {
+                    const char * window = frame + (offset > lz77::HIST_SIZE ? offset - lz77::HIST_SIZE : 0);
+                    const char * start  = frame + offset;
+                    const char * end    = frame + std::min(rd_end, offset + BATCH_SIZE);
+                    threads.emplace_back([threadID, window, start, end, &prevs, &heads, &llen_packs, &dist_packs, &lzss_parts](){
+                        lzss_parts[threadID] = lz77::deflate(window, start - window, end - window, prevs[threadID], heads[threadID], llen_packs[threadID], dist_packs[threadID]);
+                    });
+                }
+                else
+                    lzss_parts[threadID] = 0;
+            }
+            for (std::thread& t : threads)
+                t.join();
+            threads.clear();
+            const uint32_t upper = rd_shift + rd_current == 0 ? batch_size2 : disk_trigger2;
             rd_current = rd_end;
 
             if (rd_end == upper)
@@ -250,64 +272,58 @@ void zip(const std::string& bigfile, const std::string& smallfile, const bool pr
                 rd_end     = lz77::HIST_SIZE;
                 rd_current = lz77::HIST_SIZE;
 
-                const uint32_t current_read = rd_shift + DISK_TRIGGER > size_file ? size_file - rd_shift - lz77::HIST_SIZE : BATCH_SIZE;
+                const uint32_t current_read = rd_shift + disk_trigger2 > size_file ? size_file - rd_shift - lz77::HIST_SIZE : batch_size2;
                 origfile.read(frame + lz77::HIST_SIZE, current_read);
                 checksum = crc32::update(checksum, frame + lz77::HIST_SIZE, current_read);
                 rd_end += current_read;
             }
 
-            wr_current += result.first;
-            assert(wr_current <= ZSEB_ARRAY_SIZE);
-            size_lzss += result.second;
+            size_t total = llen_combi.size();
+            for (const std::vector<uint8_t>& item : llen_packs)
+                total += item.size();
+            llen_combi.reserve(total);
+            dist_combi.reserve(total);
+            for (std::vector<uint8_t>& llen_pack : llen_packs)
+            {
+                llen_combi.insert(llen_combi.end(), llen_pack.begin(), llen_pack.end());
+                llen_pack.clear();
+            }
+            for (std::vector<uint16_t>& dist_pack : dist_packs)
+            {
+                dist_combi.insert(dist_combi.end(), dist_pack.begin(), dist_pack.end());
+                dist_pack.clear();
+            }
+            for (const uint32_t lzss : lzss_parts)
+                size_lzss += lzss;
 
             last_block = rd_shift + rd_current == size_file;
         }
-
-        const uint32_t huffman_size = std::min(wr_current, ZSEB_BLOCK_SIZE);
         auto end = std::chrono::steady_clock::now();
         time_lzss += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 
         // Compute dynamic Huffman trees & X01 and X10 sizes
         start = std::chrono::steady_clock::now();
-        coder.calc_tree( llen_pack, dist_pack, huffman_size );
+        const uint32_t huffman_size = std::min(static_cast<uint32_t>(llen_combi.size()), ZSEB_BLOCK_SIZE);
+        coder.calc_tree(&llen_combi[0], &dist_combi[0], huffman_size); // TODO
         const uint32_t size_X1 = coder.get_size_X1();
         const uint32_t size_X2 = coder.get_size_X2();
-        end = std::chrono::steady_clock::now();
-        time_huff += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-
         // What is the minimal output?
-        block_form = size_X2 < size_X1 ? 2 : 1;
-        zipfile.write(last_block ? 1 : 0, 1);
+        const uint32_t block_form = size_X2 < size_X1 ? 2 : 1;
+        zipfile.write(last_block && (huffman_size == llen_combi.size()) ? 1 : 0, 1);
         zipfile.write(block_form, 2);
-
         // Write out
-        start = std::chrono::steady_clock::now();
         if (block_form == 2)
             coder.write_tree(zipfile);
         else
             coder.fixed_tree('O');
-        coder.pack(zipfile, llen_pack, dist_pack, huffman_size);
+        coder.pack(zipfile, &llen_combi[0], &dist_combi[0], huffman_size); // TODO
+        llen_combi.erase(llen_combi.begin(), llen_combi.begin() + huffman_size);
+        dist_combi.erase(dist_combi.begin(), dist_combi.begin() + huffman_size);
         end = std::chrono::steady_clock::now();
         time_huff += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-
-        //Shift the non-used tail of llen_pack & dist_pack down
-        wr_current = wr_current - huffman_size;
-        if (wr_current > 0)
-        {
-            for (uint32_t cnt = 0; cnt < wr_current; ++cnt)
-                llen_pack[cnt] = llen_pack[huffman_size + cnt];
-            for (uint32_t cnt = 0; cnt < wr_current; ++cnt)
-                dist_pack[cnt] = dist_pack[huffman_size + cnt];
-        }
     }
 
-    //delete coder;
-    delete [] llen_pack;
-    delete [] dist_pack;
     delete [] frame;
-    delete [] head;
-    delete [] prev;
-
     if (origfile.is_open()){ origfile.close(); }
 
     zipfile.flush();

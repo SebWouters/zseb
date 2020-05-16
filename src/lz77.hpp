@@ -44,7 +44,7 @@ constexpr const uint32_t HASH_STOP = 0;
 constexpr const uint32_t TOO_FAR   = 4096; // Discard matches of length LEN_SHIFT if further than TOO_FAR
 
 
-constexpr std::pair<uint32_t, uint16_t> match(const char * window, const uint32_t current, const uint32_t runway, const uint32_t * prev) noexcept
+constexpr std::pair<uint32_t, uint16_t> match(const char * window, const uint32_t current, const uint32_t runway, const std::array<uint32_t, HIST_SIZE>& prev) noexcept
 {
     const uint16_t max_len = std::min(MAX_MATCH, runway);
     if (max_len < LEN_SHIFT)
@@ -107,7 +107,7 @@ constexpr uint32_t update(const uint32_t key, const char next) noexcept
 }
 
 
-constexpr uint32_t prepare(const char * window, const uint32_t start, const uint32_t end, uint32_t * prev, uint32_t * head) noexcept
+inline uint32_t prepare(const char * window, const uint32_t start, const uint32_t end, std::array<uint32_t, HIST_SIZE>& prev, std::array<uint32_t, HASH_SIZE>& head) noexcept
 {
     for (uint32_t cnt = 0; cnt < HIST_SIZE; ++cnt) { prev[cnt] = HASH_STOP; }
     for (uint32_t cnt = 0; cnt < HASH_SIZE; ++cnt) { head[cnt] = HASH_STOP; }
@@ -119,6 +119,7 @@ constexpr uint32_t prepare(const char * window, const uint32_t start, const uint
         key = update(key, window[1]);
         key = update(key, window[2]);
 
+        assert(start <= HIST_SIZE);
         for (uint32_t cnt = 0; cnt < start; ++cnt)
         {
             prev[cnt] = head[key];
@@ -130,10 +131,13 @@ constexpr uint32_t prepare(const char * window, const uint32_t start, const uint
 }
 
 
-constexpr std::pair<uint32_t, uint32_t> deflate(const char * window, uint32_t current, const uint32_t end, uint32_t * prev, uint32_t * head, uint8_t * llen_pack, uint16_t * dist_pack) noexcept
+inline uint32_t deflate(const char * window, uint32_t current, const uint32_t end,
+    std::array<uint32_t, HIST_SIZE>& prev,
+    std::array<uint32_t, HASH_SIZE>& head,
+    std::vector<uint8_t>&  llen_pack,
+    std::vector<uint16_t>& dist_pack) noexcept
 {
     uint32_t key = prepare(window, current, end, prev, head);
-    uint32_t pack = 0;
     uint32_t lzss = 0;
 
     uint32_t now_ptr = HASH_STOP;
@@ -151,9 +155,7 @@ constexpr std::pair<uint32_t, uint32_t> deflate(const char * window, uint32_t cu
         else
         {
             prev[current & HIST_MASK] = head[key];
-            std::pair<uint32_t, uint16_t> now_res = match(window, current, end - current, prev); // End - current: do not peek beyond current frame!
-            now_ptr = now_res.first; // Awaiting std::tie to become constexpr compatible
-            now_len = now_res.second;
+            std::tie(now_ptr, now_len) = match(window, current, end - current, prev); // End - current: do not peek beyond current frame!
         }
 
         prev[current & HIST_MASK] = head[key];
@@ -161,24 +163,20 @@ constexpr std::pair<uint32_t, uint32_t> deflate(const char * window, uint32_t cu
         key = update(key, window[current + 3]);
         ++current;
         prev[current & HIST_MASK] = head[key];
-        std::pair<uint32_t, uint16_t> nxt_res = match(window, current, end - current, prev); // End - current: do not peek beyond current frame!
-        nxt_ptr = nxt_res.first; // Awaiting std::tie to become constexpr compatible
-        nxt_len = nxt_res.second;
+        std::tie(nxt_ptr, nxt_len) = match(window, current, end - current, prev); // End - current: do not peek beyond current frame!
 
         if ((now_ptr == HASH_STOP) || (nxt_len > now_len))
         {
             lzss += CHAR_BIT + 1;
-            llen_pack[pack] = static_cast<uint8_t>(window[current - 1]);
-            dist_pack[pack] = UINT16_MAX;
-            ++pack;
+            llen_pack.push_back(static_cast<uint8_t>(window[current - 1]));
+            dist_pack.push_back(UINT16_MAX);
             now_len = 1;
         }
         else
         {
             lzss += HIST_BITS + CHAR_BIT + 1;
-            llen_pack[pack] = static_cast<uint8_t>(now_len - LEN_SHIFT);
-            dist_pack[pack] = static_cast<uint16_t>(current - (1 + now_ptr + DIS_SHIFT));
-            ++pack;
+            llen_pack.push_back(static_cast<uint8_t>(now_len - LEN_SHIFT));
+            dist_pack.push_back(static_cast<uint16_t>(current - (1 + now_ptr + DIS_SHIFT)));
         }
 
         for (uint16_t cnt = 1; cnt < now_len; ++cnt)
@@ -189,7 +187,7 @@ constexpr std::pair<uint32_t, uint32_t> deflate(const char * window, uint32_t cu
             ++current;
         }
     }
-    return { pack, lzss };
+    return lzss;
 }
 
 
