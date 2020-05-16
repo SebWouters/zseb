@@ -20,6 +20,9 @@
 #define ZSEB_VERSION   "UNRELEASED" //"0.9.6"
 
 #include <getopt.h>
+#include <iostream>
+
+#include "dtypes.h"
 #include "zseb.h"
 
 void print_help(){

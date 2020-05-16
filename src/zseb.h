@@ -19,14 +19,8 @@
 
 #pragma once
 
-#include <iostream>
-#include <fstream>
 #include <string>
 
-#include "dtypes.h"
-#include "stream.h"
-//#include "lzss.h"
-#include "huffman.h"
 
 namespace zseb
 {

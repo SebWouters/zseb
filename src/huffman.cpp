@@ -127,30 +127,28 @@ uint8_t zseb::huffman::__dist_code__( const uint16_t dist_shft ){
 
 }
 
-void zseb::huffman::load_tree( stream * zipfile ){
+void zseb::huffman::load_tree(ibstream& zipfile)
+{
+    for (uint32_t cnt = 0; cnt < ZSEB_HUF_COMBI; ++cnt){ stat_comb[cnt] = 0; }
+    for (uint32_t cnt = 0; cnt < ZSEB_HUF_SSQ;   ++cnt){ stat_ssq [cnt] = 0; }
 
-   for ( uint16_t cnt = 0; cnt < ZSEB_HUF_COMBI; cnt++ ){ stat_comb[ cnt ] = 0; }
-   for ( uint16_t cnt = 0; cnt < ZSEB_HUF_SSQ;   cnt++ ){ stat_ssq [ cnt ] = 0; }
+    HLIT  = static_cast<uint16_t>(zipfile.read(5) + 257);
+    HDIST = static_cast<uint16_t>(zipfile.read(5) + 1);
+    HCLEN = static_cast<uint16_t>(zipfile.read(4) + 4);
 
-   HLIT  = static_cast<uint16_t>( zipfile->read( 5 ) ) + 257;
-   HDIST = static_cast<uint16_t>( zipfile->read( 5 ) ) + 1;
-   HCLEN = static_cast<uint16_t>( zipfile->read( 4 ) ) + 4;
+    for (uint16_t idx_pos = 0; idx_pos < HCLEN; ++idx_pos)
+        stat_ssq[map_ssq[idx_pos]] = static_cast<uint16_t>(zipfile.read(3)); // CCL of RLE symbols; stat_ssq in idx_sym
 
-   for ( uint16_t idx_pos = 0; idx_pos < HCLEN; idx_pos++ ){
-      stat_ssq[ map_ssq[ idx_pos ] ] = static_cast<uint16_t>( zipfile->read( 3 ) ); // CCL of RLE symbols; stat_ssq in idx_sym
-   }
+    // Build tree: on output tree[ idx ].( info, data ) = bit ( length, sequence ) of SSQ; tree_ssq in idx_sym
+    __build_tree__(stat_ssq, ZSEB_HUF_SSQ, tree_ssq, work, 'I', ZSEB_MAX_BITS_SSQ);
 
-   // Build tree: on output tree[ idx ].( info, data ) = bit ( length, sequence ) of SSQ; tree_ssq in idx_sym
-   __build_tree__( stat_ssq, ZSEB_HUF_SSQ, tree_ssq, work, 'I', ZSEB_MAX_BITS_SSQ );
+    // Quote from RFC 1951: all CL form a single sequence of HLIT + HDIST + 258 values
+    __CL_unpack__(zipfile, tree_ssq, HLIT + HDIST, stat_comb);
+    uint16_t * stat_dist = stat_comb + HLIT;
 
-   // Quote from RFC 1951: all CL form a single sequence of HLIT + HDIST + 258 values
-   __CL_unpack__( zipfile, tree_ssq, HLIT + HDIST, stat_comb );
-   uint16_t * stat_dist = stat_comb + HLIT;
-
-   // Build trees
-   __build_tree__( stat_comb, HLIT , tree_llen, work, 'I', ZSEB_MAX_BITS_LLD );
-   __build_tree__( stat_dist, HDIST, tree_dist, work, 'I', ZSEB_MAX_BITS_LLD );
-
+    // Build trees
+    __build_tree__(stat_comb, HLIT , tree_llen, work, 'I', ZSEB_MAX_BITS_LLD);
+    __build_tree__(stat_dist, HDIST, tree_dist, work, 'I', ZSEB_MAX_BITS_LLD);
 }
 
 void zseb::huffman::calc_tree( uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size ){
@@ -240,26 +238,26 @@ void zseb::huffman::calc_tree( uint8_t * llen_pack, uint16_t * dist_pack, const 
 
 }
 
-void zseb::huffman::write_tree( stream * zipfile ) const{
+void zseb::huffman::write_tree(obstream& zipfile) const
+{
+    zipfile.write(HLIT  - 257, 5);
+    zipfile.write(HDIST - 1,   5);
+    zipfile.write(HCLEN - 4,   4);
 
-   zipfile->write( HLIT  - 257, 5 );
-   zipfile->write( HDIST - 1,   5 );
-   zipfile->write( HCLEN - 4,   4 );
+    for (uint16_t idx_pos = 0; idx_pos < HCLEN; ++idx_pos)
+        zipfile.write(stat_ssq[map_ssq[idx_pos]], 3); // CCL of RLE in idx_pos
 
-   for ( uint16_t idx_pos = 0; idx_pos < HCLEN; idx_pos++ ){
-      zipfile->write( stat_ssq[ map_ssq[ idx_pos ] ], 3 ); // CCL of RLE in idx_pos
-   }
-
-   for ( uint16_t idx = 0; idx < size_ssq; idx++ ){
-      const uint16_t idx_sym = stat_comb[ idx ];
-      zipfile->write( tree_ssq[ idx_sym ].data, tree_ssq[ idx_sym ].info ); // RLE symbols in CCL codons; tree_ssq in idx_sym
-      if ( idx_sym >= 16 ){
-         const uint16_t num_bits = ( ( idx_sym == 16 ) ? 2 : ( ( idx_sym == 17 ) ? 3 : 7 ) );
-         zipfile->write( stat_comb[ idx + 1 ], num_bits ); // Shifts
-         idx++;
-      }
-   }
-
+    for (uint16_t idx = 0; idx < size_ssq; ++idx)
+    {
+        const uint16_t idx_sym = stat_comb[idx];
+        zipfile.write(tree_ssq[idx_sym].data, tree_ssq[idx_sym].info); // RLE symbols in CCL codons; tree_ssq in idx_sym
+        if (idx_sym >= 16)
+        {
+            const uint16_t num_bits = idx_sym == 16 ? 2 : (idx_sym == 17 ? 3 : 7);
+            zipfile.write(stat_comb[idx + 1], num_bits); // Shifts
+            ++idx;
+        }
+    }
 }
 
 void zseb::huffman::fixed_tree( const char modus ){
@@ -281,7 +279,7 @@ void zseb::huffman::fixed_tree( const char modus ){
 
 }
 
-void zseb::huffman::unpack(stream * zipfile, std::vector<uint8_t>& llen_pack, std::vector<uint16_t>& dist_pack)
+void zseb::huffman::unpack(ibstream& zipfile, std::vector<uint8_t>& llen_pack, std::vector<uint16_t>& dist_pack)
 {
     assert(llen_pack.size() == 0);
     assert(dist_pack.size() == 0);
@@ -302,13 +300,13 @@ void zseb::huffman::unpack(stream * zipfile, std::vector<uint8_t>& llen_pack, st
             uint16_t len_shft = __len_base__(llen_code);
             uint16_t len_nbit = __len_bits__(llen_code);
             if (len_nbit != 0)
-                len_shft = len_shft + static_cast<uint16_t>(zipfile->read(len_nbit));
+                len_shft = len_shft + static_cast<uint16_t>(zipfile.read(len_nbit));
 
             uint16_t dis_code = __get_sym__(zipfile, tree_dist);
             uint16_t dis_shft = add_dist[dis_code];
             uint16_t dis_nbit = bit_dist[dis_code];
             if (dis_nbit != 0)
-                dis_shft = dis_shft + static_cast<uint16_t>(zipfile->read(dis_nbit));
+                dis_shft = dis_shft + static_cast<uint16_t>(zipfile.read(dis_nbit));
 
             llen_pack.push_back(len_shft);
             dist_pack.push_back(dis_shft);
@@ -316,94 +314,89 @@ void zseb::huffman::unpack(stream * zipfile, std::vector<uint8_t>& llen_pack, st
     }
 }
 
-void zseb::huffman::pack( stream * zipfile, uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size ){
-
-   for ( uint32_t idx = 0; idx < size; idx++ ){
+void zseb::huffman::pack(obstream& zipfile, uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size)
+{
+    for (uint32_t idx = 0; idx < size; ++idx)
+    {
       if ( dist_pack[ idx ] == ZSEB_MASK_16T ){
          const uint16_t lit_code = llen_pack[ idx ];
-         zipfile->write( tree_llen[ lit_code ].data, tree_llen[ lit_code ].info ); // Literal
+         zipfile.write( tree_llen[ lit_code ].data, tree_llen[ lit_code ].info ); // Literal
       } else {
          const uint16_t len_code = __len_code__( llen_pack[ idx ] );
          const uint16_t len_nbit = __len_bits__( len_code );
-         zipfile->write( tree_llen[ len_code ].data, tree_llen[ len_code ].info ); // Length codon
+         zipfile.write( tree_llen[ len_code ].data, tree_llen[ len_code ].info ); // Length codon
          if ( len_nbit > 0 ){
             const uint16_t len_plus = llen_pack[ idx ] - __len_base__( len_code );
-            zipfile->write( len_plus, len_nbit ); // Shifts
+            zipfile.write( len_plus, len_nbit ); // Shifts
          }
          const uint16_t dist_code = __dist_code__( dist_pack[ idx ] );
          const uint16_t dist_nbit = bit_dist[ dist_code ];
-         zipfile->write( tree_dist[ dist_code ].data, tree_dist[ dist_code ].info ); // Dist codon
+         zipfile.write( tree_dist[ dist_code ].data, tree_dist[ dist_code ].info ); // Dist codon
          if ( dist_nbit > 0 ){
             const uint16_t dist_plus = dist_pack[ idx ] - add_dist[ dist_code ];
-            zipfile->write( dist_plus, dist_nbit ); // Shifts
+            zipfile.write( dist_plus, dist_nbit ); // Shifts
          }
       }
    }
-   zipfile->write( tree_llen[ ZSEB_LITLEN ].data, tree_llen[ ZSEB_LITLEN ].info ); // Stop codon
+   zipfile.write( tree_llen[ ZSEB_LITLEN ].data, tree_llen[ ZSEB_LITLEN ].info ); // Stop codon
 
 }
 
-uint16_t zseb::huffman::__get_sym__( stream * zipfile, zseb_node * tree ){
+uint16_t zseb::huffman::__get_sym__(ibstream& zipfile, zseb_node * tree)
+{
+    uint16_t idx = 0; // start at root
+    uint32_t bit;
 
-   uint16_t idx = 0; // start at root
-   uint32_t bit;
+    while (tree[idx].child[0] != tree[idx].child[1]) // Not a leaf
+    {
+        bit = zipfile.read(1); // read-in bit
+        idx = tree[idx].child[bit]; // goto child
+    }
 
-   while ( tree[ idx ].child[ 0 ] != tree[ idx ].child[ 1 ] ){ // not a leaf
-      bit = zipfile->read( 1 ); // read-in bit
-      idx = tree[ idx ].child[ bit ]; // goto child
-   }
-
-   idx = tree[ idx ].child[ 0 ]; // symbol the leaf represents
-   return idx;
-
+    idx = tree[idx].child[0]; // symbol the leaf represents
+    return idx;
 }
 
-void zseb::huffman::__CL_unpack__( stream * zipfile, zseb_node * tree, const uint16_t size, uint16_t * stat ){
+void zseb::huffman::__CL_unpack__(ibstream& zipfile, zseb_node * tree, const uint16_t size, uint16_t * stat)
+{
+    //uint32_t bit;
+    uint16_t size_part = 0;
+    uint16_t idx_sym;
 
-   uint32_t bit;
-   uint16_t size_part = 0;
-   uint16_t idx_sym;
+    while (size_part < size)
+    {
+        idx_sym = __get_sym__(zipfile, tree);
 
-   while ( size_part < size ){
-      idx_sym = __get_sym__( zipfile, tree );
+        if (idx_sym < 16)
+        {
+            stat[size_part] = idx_sym;
+            ++size_part;
+        }
 
-      if ( idx_sym < 16 ){
-         stat[ size_part ] = idx_sym;
-         size_part += 1;
-      }
+        if (idx_sym == 16)
+        {
+            assert(size_part > 0);
+            uint16_t bound = size_part + static_cast<uint16_t>(3 + zipfile.read(2));
+            const uint16_t item = stat[size_part - 1];
+            for (; size_part < bound; ++size_part)
+                stat[size_part] = item;
+        }
 
-      if ( idx_sym == 16 ){
-         assert( size_part > 0 );
-         bit = 3 + zipfile->read( 2 ); // num repeats
-         while ( bit > 0 ){
-            stat[ size_part ] = stat[ size_part - 1 ];
-            size_part += 1;
-            bit -= 1;
-         }
-      }
+        if (idx_sym == 17)
+        {
+            uint16_t bound = size_part + static_cast<uint16_t>(3 + zipfile.read(3));
+            for (; size_part < bound; ++size_part)
+                stat[size_part] = 0;
+        }
 
-      if ( idx_sym == 17 ){
-         bit = 3 + zipfile->read( 3 ); // num repeats
-         while ( bit > 0 ){
-            stat[ size_part ] = 0;
-            size_part += 1;
-            bit -= 1;
-         }
-      }
-
-      if ( idx_sym == 18 ){
-         bit = 11 + zipfile->read( 7 ); // num repeats
-         while ( bit > 0 ){
-            stat[ size_part ] = 0;
-            size_part += 1;
-            bit -= 1;
-         }
-      }
-
-   }
-
-   assert( size == size_part );
-
+        if (idx_sym == 18)
+        {
+            uint16_t bound = size_part + static_cast<uint16_t>(11 + zipfile.read(7));
+            for (; size_part < bound; ++size_part)
+               stat[size_part] = 0;
+        }
+    }
+    assert(size == size_part);
 }
 
 uint16_t zseb::huffman::__ssq_creation__( uint16_t * stat, const uint16_t size ){

@@ -25,7 +25,7 @@
 #include <vector>
 
 #include "dtypes.h"
-#include "stream.h"
+#include "bitstream.hpp"
 
 #define ZSEB_HUF_LLEN       288      // 0-255 lit; 256 stop; 257-285 len; 286 and 287 unused
 #define ZSEB_HUF_DIST       32       // 0-29 dist; 30 and 31 unused
@@ -57,19 +57,19 @@ namespace zseb{
 
          /***  TREES  ***/
 
-         void load_tree( stream * zipfile );
+         void load_tree(ibstream& zipfile);
 
          void calc_tree( uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size );
 
-         void write_tree( stream * zipfile ) const;
+         void write_tree(obstream& zipfile) const;
 
          void fixed_tree( const char modus );
 
          /***  (UN)PACK  ***/
 
-         void pack( stream * zipfile, uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size );
+         void pack(obstream& zipfile, uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size);
 
-         void unpack(stream * zipfile, std::vector<uint8_t>& llen_pack, std::vector<uint16_t>& dist_pack);
+         void unpack(ibstream& zipfile, std::vector<uint8_t>& llen_pack, std::vector<uint16_t>& dist_pack);
 
          /***  Get sizes of fixed / dynamic trees  ***/
 
@@ -115,9 +115,9 @@ namespace zseb{
 
          static uint16_t __ssq_creation__( uint16_t * stat, const uint16_t size );
 
-         static void __CL_unpack__( stream * zipfile, zseb_node * tree, const uint16_t size, uint16_t * stat );
+         static void __CL_unpack__(ibstream& zipfile, zseb_node * tree, const uint16_t size, uint16_t * stat);
 
-         static uint16_t __get_sym__( stream * zipfile, zseb_node * tree );
+         static uint16_t __get_sym__(ibstream& zipfile, zseb_node * tree);
 
          /***  HUFFMAN TREE STATIC CONSTANTS  ***/
 

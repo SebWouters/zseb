@@ -26,7 +26,8 @@
 #include <chrono>
 
 #include "zseb.h"
-#include "stream.h"
+#include "huffman.h"
+#include "bitstream.hpp"
 #include "crc32.hpp"
 #include "lz77.hpp"
 
@@ -43,7 +44,7 @@ constexpr const uint32_t FRAME_EXTRA  = 272;
 constexpr const uint32_t ZSEB_BLOCK_SIZE = 32767; // GZIP packs in blocks of 32767
 constexpr const uint32_t ZSEB_ARRAY_SIZE = 98304;
 
-uint32_t write_header(const std::string& bigfile, stream * zipfile)
+uint32_t write_header(const std::string& bigfile, obstream& zipfile)
 {
     /***  Variables  ***/
     uint32_t crc16 = 0;
@@ -61,13 +62,13 @@ uint32_t write_header(const std::string& bigfile, stream * zipfile)
     stream::int2str(mtime, temp, 4);
 
     /***  GZIP header  ***/
-    /* ID1 */ var = static_cast<uint8_t>(0x1f); zipfile->write(&var, 1); crc16 = crc32::update(crc16, &var, 1);
-    /* ID2 */ var = static_cast<uint8_t>(0x8b); zipfile->write(&var, 1); crc16 = crc32::update(crc16, &var, 1);
-    /* CM  */ var = static_cast<uint8_t>(8);    zipfile->write(&var, 1); crc16 = crc32::update(crc16, &var, 1);
-    /* FLG */ var = static_cast<uint8_t>(10);   zipfile->write(&var, 1); crc16 = crc32::update(crc16, &var, 1); // (0, 0, 0, FCOMMENT=0, FNAME=1, FEXTRA=0, FHCRC=1, FTEXT=0)
-    /* MTIME */                                 zipfile->write(temp, 4); crc16 = crc32::update(crc16, temp, 4);
-    /* XFL */ var = static_cast<uint8_t>(0);    zipfile->write(&var, 1); crc16 = crc32::update(crc16, &var, 1);
-    /* OS  */ var = static_cast<uint8_t>(255);  zipfile->write(&var, 1); crc16 = crc32::update(crc16, &var, 1); // Unknown Operating System
+    /* ID1 */ var = static_cast<uint8_t>(0x1f); zipfile.write(&var, 1); crc16 = crc32::update(crc16, &var, 1);
+    /* ID2 */ var = static_cast<uint8_t>(0x8b); zipfile.write(&var, 1); crc16 = crc32::update(crc16, &var, 1);
+    /* CM  */ var = static_cast<uint8_t>(8);    zipfile.write(&var, 1); crc16 = crc32::update(crc16, &var, 1);
+    /* FLG */ var = static_cast<uint8_t>(10);   zipfile.write(&var, 1); crc16 = crc32::update(crc16, &var, 1); // (0, 0, 0, FCOMMENT=0, FNAME=1, FEXTRA=0, FHCRC=1, FTEXT=0)
+    /* MTIME */                                 zipfile.write(temp, 4); crc16 = crc32::update(crc16, temp, 4);
+    /* XFL */ var = static_cast<uint8_t>(0);    zipfile.write(&var, 1); crc16 = crc32::update(crc16, &var, 1);
+    /* OS  */ var = static_cast<uint8_t>(255);  zipfile.write(&var, 1); crc16 = crc32::update(crc16, &var, 1); // Unknown Operating System
 
     // FLG.FEXTRA --> no
     // FLG.FNAME  --> yes
@@ -83,22 +84,22 @@ uint32_t write_header(const std::string& bigfile, stream * zipfile)
     std::string stripped = prev == std::string::npos ? bigfile : bigfile.substr(prev + 1, std::string::npos);
     const uint32_t length = static_cast<uint32_t>(stripped.length());
     const char * buffer = stripped.c_str();
-    zipfile->write(buffer, length);
+    zipfile.write(buffer, length);
     crc16 = crc32::update(crc16, buffer, length);
-    /* ZER */ var = static_cast<uint8_t>(0);    zipfile->write(&var, 1); crc16 = crc32::update(crc16, &var, 1);
+    /* ZER */ var = static_cast<uint8_t>(0);    zipfile.write(&var, 1); crc16 = crc32::update(crc16, &var, 1);
 
     // FLG.FCOMMENT --> no
     // FLG.FHCRC    --> yes
 
     /***  Two least significant bytes of all bytes preceding the CRC16  ***/
     stream::int2str(crc16, temp, 2);
-    zipfile->write(temp, 2);
+    zipfile.write(temp, 2);
 
     return mtime;
 }
 
 
-std::pair<std::string, uint32_t> read_header(stream * zipfile)
+std::pair<std::string, uint32_t> read_header(ibstream& zipfile)
 {
     /***  Variables  ***/
     uint32_t crc16 = 0;
@@ -106,10 +107,10 @@ std::pair<std::string, uint32_t> read_header(stream * zipfile)
     char temp[4];
 
     /***  GZIP header  ***/
-    /* ID1 */ zipfile->read(&var, 1); crc16 = crc32::update(crc16, &var, 1); if (static_cast<uint8_t>(var) != 0x1f){ std::cerr << "zseb: Incompatible ID1." << std::endl; exit(255); }
-    /* ID2 */ zipfile->read(&var, 1); crc16 = crc32::update(crc16, &var, 1); if (static_cast<uint8_t>(var) != 0x8b){ std::cerr << "zseb: Incompatible ID2." << std::endl; exit(255); }
-    /* CM  */ zipfile->read(&var, 1); crc16 = crc32::update(crc16, &var, 1); if (static_cast<uint8_t>(var) != 8   ){ std::cerr << "zseb: Incompatible CM."  << std::endl; exit(255); }
-    /* FLG */ zipfile->read(&var, 1); crc16 = crc32::update(crc16, &var, 1); const uint8_t FLG = static_cast<uint8_t>(var);
+    /* ID1 */ zipfile.read(&var, 1); crc16 = crc32::update(crc16, &var, 1); if (static_cast<uint8_t>(var) != 0x1f){ std::cerr << "zseb: Incompatible ID1." << std::endl; exit(255); }
+    /* ID2 */ zipfile.read(&var, 1); crc16 = crc32::update(crc16, &var, 1); if (static_cast<uint8_t>(var) != 0x8b){ std::cerr << "zseb: Incompatible ID2." << std::endl; exit(255); }
+    /* CM  */ zipfile.read(&var, 1); crc16 = crc32::update(crc16, &var, 1); if (static_cast<uint8_t>(var) != 8   ){ std::cerr << "zseb: Incompatible CM."  << std::endl; exit(255); }
+    /* FLG */ zipfile.read(&var, 1); crc16 = crc32::update(crc16, &var, 1); const uint8_t FLG = static_cast<uint8_t>(var);
     if (((FLG >> 7) & 1U) == 1U){ std::cerr << "zseb: Reserved bit is non-zero." << std::endl; exit(255); }
     if (((FLG >> 6) & 1U) == 1U){ std::cerr << "zseb: Reserved bit is non-zero." << std::endl; exit(255); }
     if (((FLG >> 5) & 1U) == 1U){ std::cerr << "zseb: Reserved bit is non-zero." << std::endl; exit(255); }
@@ -118,18 +119,18 @@ std::pair<std::string, uint32_t> read_header(stream * zipfile)
     const bool FEXTRA   = (((FLG >> 2) & 1U) == 1U);
     const bool FHCRC    = (((FLG >> 1) & 1U) == 1U);
   //const bool FTEXT    = (( FLG       & 1U) == 1U);
-    /* MTIME */ zipfile->read(temp, 4); crc16 = crc32::update(crc16, temp, 4); const uint32_t mtime = stream::str2int(temp, 4);
-    /* XFL   */ zipfile->read(&var, 1); crc16 = crc32::update(crc16, &var, 1);
-    /* OS    */ zipfile->read(&var, 1); crc16 = crc32::update(crc16, &var, 1);
+    /* MTIME */ zipfile.read(temp, 4); crc16 = crc32::update(crc16, temp, 4); const uint32_t mtime = stream::str2int(temp, 4);
+    /* XFL   */ zipfile.read(&var, 1); crc16 = crc32::update(crc16, &var, 1);
+    /* OS    */ zipfile.read(&var, 1); crc16 = crc32::update(crc16, &var, 1);
 
     if (FEXTRA)
     {
-        zipfile->read(temp, 2);
+        zipfile.read(temp, 2);
         crc16 = crc32::update(crc16, temp, 2);
         const uint16_t XLEN = static_cast<uint16_t>(stream::str2int(temp, 2));
         for (uint16_t cnt = 0; cnt < XLEN; ++cnt)
         {
-            zipfile->read(&var, 1);
+            zipfile.read(&var, 1);
             crc16 = crc32::update(crc16, &var, 1);
         }
     }
@@ -140,7 +141,7 @@ std::pair<std::string, uint32_t> read_header(stream * zipfile)
         bool proceed = true;
         while (proceed)
         {
-            zipfile->read(&var, 1);
+            zipfile.read(&var, 1);
             crc16 = crc32::update(crc16, &var, 1);
             proceed = static_cast<uint8_t>(var) != 0;
             if (proceed){ filename += var; }
@@ -152,7 +153,7 @@ std::pair<std::string, uint32_t> read_header(stream * zipfile)
         bool proceed = true;
         while (proceed)
         {
-            zipfile->read(&var, 1);
+            zipfile.read(&var, 1);
             crc16 = crc32::update(crc16, &var, 1);
             proceed = static_cast<uint8_t>(var) != 0;
         }
@@ -160,7 +161,7 @@ std::pair<std::string, uint32_t> read_header(stream * zipfile)
 
     if (FHCRC)
     {
-        zipfile->read(temp, 2);
+        zipfile.read(temp, 2);
         const uint32_t checksum = stream::str2int(temp, 2);
         crc16 = crc16 & UINT16_MAX;
         if (checksum != crc16)
@@ -187,7 +188,7 @@ void set_time(const std::string& filename, const uint32_t mtime)
 
 void zip(const std::string& bigfile, const std::string& smallfile, const bool print)
 {
-    stream * zipfile = new stream(smallfile, 'W');
+    obstream zipfile(smallfile);
     const uint32_t mtime = write_header(bigfile, zipfile);
     std::ifstream origfile;
     origfile.open(bigfile.c_str(), std::ios::in|std::ios::binary|std::ios::ate);
@@ -206,7 +207,7 @@ void zip(const std::string& bigfile, const std::string& smallfile, const bool pr
     uint32_t * prev = new uint32_t[lz77::HIST_SIZE];
     uint8_t  * llen_pack = new  uint8_t[ZSEB_ARRAY_SIZE];
     uint16_t * dist_pack = new uint16_t[ZSEB_ARRAY_SIZE];
-    huffman * coder = new huffman();
+    huffman coder;
 
     uint32_t checksum   = 0;
     uint64_t rd_shift   = 0;
@@ -216,7 +217,7 @@ void zip(const std::string& bigfile, const std::string& smallfile, const bool pr
     origfile.read(frame, rd_end);
     checksum = crc32::update(checksum, frame, rd_end);
 
-    uint64_t size_zlib = zipfile->getpos(); // Preamble are full bytes
+    uint64_t size_zlib = zipfile.pos(); // Preamble are full bytes
     uint32_t wr_current = 0;
 
     bool last_block = false;
@@ -268,24 +269,24 @@ void zip(const std::string& bigfile, const std::string& smallfile, const bool pr
 
         // Compute dynamic Huffman trees & X01 and X10 sizes
         start = std::chrono::steady_clock::now();
-        coder->calc_tree( llen_pack, dist_pack, huffman_size );
-        const uint32_t size_X1 = coder->get_size_X1();
-        const uint32_t size_X2 = coder->get_size_X2();
+        coder.calc_tree( llen_pack, dist_pack, huffman_size );
+        const uint32_t size_X1 = coder.get_size_X1();
+        const uint32_t size_X2 = coder.get_size_X2();
         end = std::chrono::steady_clock::now();
         time_huff += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 
         // What is the minimal output?
         block_form = size_X2 < size_X1 ? 2 : 1;
-        zipfile->write(last_block ? 1 : 0, 1);
-        zipfile->write(block_form, 2);
+        zipfile.write(last_block ? 1 : 0, 1);
+        zipfile.write(block_form, 2);
 
         // Write out
         start = std::chrono::steady_clock::now();
         if (block_form == 2)
-            coder->write_tree(zipfile);
+            coder.write_tree(zipfile);
         else
-            coder->fixed_tree('O');
-        coder->pack(zipfile, llen_pack, dist_pack, huffman_size);
+            coder.fixed_tree('O');
+        coder.pack(zipfile, llen_pack, dist_pack, huffman_size);
         end = std::chrono::steady_clock::now();
         time_huff += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 
@@ -300,7 +301,7 @@ void zip(const std::string& bigfile, const std::string& smallfile, const bool pr
         }
     }
 
-    delete coder;
+    //delete coder;
     delete [] llen_pack;
     delete [] dist_pack;
     delete [] frame;
@@ -309,19 +310,19 @@ void zip(const std::string& bigfile, const std::string& smallfile, const bool pr
 
     if (origfile.is_open()){ origfile.close(); }
 
-    zipfile->flush();
-    size_zlib = zipfile->getpos() - size_zlib; // Bytes after flush
+    zipfile.flush();
+    size_zlib = zipfile.pos() - size_zlib; // Bytes after flush
 
     char temp[4];
     // Write CRC32
     stream::int2str(checksum, temp, 4);
-    zipfile->write(temp, 4);
+    zipfile.write(temp, 4);
     // Write ISIZE = size_file mod 2^32
     const uint32_t ISIZE = static_cast<uint32_t>(size_file & UINT32_MAX);
     stream::int2str(ISIZE, temp, 4);
-    zipfile->write(temp, 4);
+    zipfile.write(temp, 4);
 
-    delete zipfile;
+    zipfile.close();
     set_time(smallfile, mtime);
 
     if (print)
@@ -336,7 +337,7 @@ void zip(const std::string& bigfile, const std::string& smallfile, const bool pr
 
 void unzip(const std::string& smallfile, std::string& bigfile, const bool name, const bool print)
 {
-    stream * zipfile = new stream(smallfile, 'R');
+    ibstream zipfile(smallfile);
     std::pair<std::string, uint32_t> orignametime = read_header(zipfile);
     if (name){ bigfile = orignametime.first; }
     std::ofstream origfile;
@@ -344,7 +345,7 @@ void unzip(const std::string& smallfile, std::string& bigfile, const bool name, 
 
     uint32_t checksum  = 0;
     uint64_t size_lzss = 0;
-    uint64_t size_zlib = zipfile->getpos(); // Preamble are full Bytes
+    uint64_t size_zlib = zipfile.pos(); // Preamble are full Bytes
 
     uint32_t last_block = 0;
 
@@ -354,12 +355,12 @@ void unzip(const std::string& smallfile, std::string& bigfile, const bool name, 
     std::vector<char> frame; frame.reserve(DISK_TRIGGER + FRAME_EXTRA);
     std::vector<uint8_t>  llen_pack; llen_pack.reserve(ZSEB_ARRAY_SIZE);
     std::vector<uint16_t> dist_pack; dist_pack.reserve(ZSEB_ARRAY_SIZE);
-    huffman * coder = new huffman();
+    huffman coder;
 
     while (last_block == 0)
     {
-        last_block = zipfile->read(1);
-        uint32_t block_form = zipfile->read(2); // '10'_b dyn trees, '01'_b fixed trees, '00'_b uncompressed, '11'_b error
+        last_block = zipfile.read(1);
+        uint32_t block_form = zipfile.read(2); // '10'_b dyn trees, '01'_b fixed trees, '00'_b uncompressed, '11'_b error
         if (block_form == 3)
         {
             std::cerr << "zseb: X11 is not a valid block mode." << std::endl;
@@ -368,10 +369,10 @@ void unzip(const std::string& smallfile, std::string& bigfile, const bool name, 
 
         if (block_form == 0)
         {
-            zipfile->nextbyte();
+            zipfile.next_byte();
             char vals[2];
-            zipfile->read(vals, 2); const uint16_t  LEN = static_cast<uint16_t>(stream::str2int(vals, 2));
-            zipfile->read(vals, 2); const uint16_t NLEN = static_cast<uint16_t>(stream::str2int(vals, 2));
+            zipfile.read(vals, 2); const uint16_t  LEN = static_cast<uint16_t>(stream::str2int(vals, 2));
+            zipfile.read(vals, 2); const uint16_t NLEN = static_cast<uint16_t>(stream::str2int(vals, 2));
             const uint16_t NLEN2 = ~LEN;
             if (NLEN != NLEN2)
             {
@@ -388,17 +389,17 @@ void unzip(const std::string& smallfile, std::string& bigfile, const bool name, 
                 frame.erase(frame.begin(), frame.begin() + write_size);
             }
             frame.insert(frame.end(), LEN, 0);
-            zipfile->read(&frame[frame.size() - LEN], LEN);
+            zipfile.read(&frame[frame.size() - LEN], LEN);
         }
         else
         {
             auto start = std::chrono::steady_clock::now();
             if (block_form == 2) // Dynamic trees
-                coder->load_tree(zipfile);
+                coder.load_tree(zipfile);
             else // Fixed trees
-                coder->fixed_tree('I');
+                coder.fixed_tree('I');
 
-            coder->unpack(zipfile, llen_pack, dist_pack);
+            coder.unpack(zipfile, llen_pack, dist_pack);
             auto end = std::chrono::steady_clock::now();
             time_huff += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 
@@ -430,15 +431,15 @@ void unzip(const std::string& smallfile, std::string& bigfile, const bool name, 
     frame.clear();
     const uint64_t size_file = static_cast<uint64_t>(origfile.tellp());
 
-    delete coder;
+    //delete coder;
     if (origfile.is_open()){ origfile.close(); }
 
-    zipfile->nextbyte();
-    size_zlib = zipfile->getpos() - size_zlib; // Bytes after nextbyte
+    zipfile.next_byte();
+    size_zlib = zipfile.pos() - size_zlib; // Bytes after nextbyte
 
     char temp[4];
     // Read CRC32
-    zipfile->read(temp, 4);
+    zipfile.read(temp, 4);
     const uint32_t checksum_read = stream::str2int(temp, 4);
     if (checksum != checksum_read)
     {
@@ -446,7 +447,7 @@ void unzip(const std::string& smallfile, std::string& bigfile, const bool name, 
         exit(255);
     }
     // Read ISIZE
-    zipfile->read(temp, 4);
+    zipfile.read(temp, 4);
     const uint32_t isize_read = stream::str2int(temp, 4);
     const uint32_t isize = static_cast<uint32_t>(size_file & UINT32_MAX);
     if (isize != isize_read)
@@ -455,7 +456,7 @@ void unzip(const std::string& smallfile, std::string& bigfile, const bool name, 
         exit(255);
     }
 
-    delete zipfile;
+    //delete zipfile;
     zseb::tools::set_time(bigfile, orignametime.second);
 
     if (print)
