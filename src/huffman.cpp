@@ -281,54 +281,39 @@ void zseb::huffman::fixed_tree( const char modus ){
 
 }
 
-bool zseb::huffman::unpack( stream * zipfile, uint8_t * llen_pack, uint16_t * dist_pack, uint32_t &wr_current, const uint32_t maxsize_pack ){
+void zseb::huffman::unpack(stream * zipfile, std::vector<uint8_t>& llen_pack, std::vector<uint16_t>& dist_pack)
+{
+    assert(llen_pack.size() == 0);
+    assert(dist_pack.size() == 0);
+    uint16_t llen_code  = 0;
 
-   assert( wr_current == 0 );
+    while (llen_code != ZSEB_LITLEN)
+    {
+        llen_code = __get_sym__(zipfile, tree_llen);
 
-   // Ready to read-in!
-   uint16_t llen_code = 0;
+        if (llen_code < ZSEB_LITLEN) // unpack literal
+        {
+            llen_pack.push_back(llen_code);
+            dist_pack.push_back(UINT16_MAX);
+        }
 
-   while ( ( llen_code != ZSEB_LITLEN ) && ( wr_current < maxsize_pack ) ){
+        if (llen_code > ZSEB_LITLEN) // unpack (length, distance) pair
+        {
+            uint16_t len_shft = __len_base__(llen_code);
+            uint16_t len_nbit = __len_bits__(llen_code);
+            if (len_nbit != 0)
+                len_shft = len_shft + static_cast<uint16_t>(zipfile->read(len_nbit));
 
-      llen_code = __get_sym__( zipfile, tree_llen );
+            uint16_t dis_code = __get_sym__(zipfile, tree_dist);
+            uint16_t dis_shft = add_dist[dis_code];
+            uint16_t dis_nbit = bit_dist[dis_code];
+            if (dis_nbit != 0)
+                dis_shft = dis_shft + static_cast<uint16_t>(zipfile->read(dis_nbit));
 
-      if ( llen_code < ZSEB_LITLEN ){ // unpack literal
-
-         llen_pack[ wr_current ] = llen_code;
-         dist_pack[ wr_current ] = ZSEB_MASK_16T;
-         wr_current += 1;
-
-      }
-
-      if ( llen_code > ZSEB_LITLEN ){ // unpack ( len, dist ) pair
-
-         uint16_t len_shft = __len_base__( llen_code );
-         uint16_t len_nbit = __len_bits__( llen_code );
-         if ( len_nbit > 0 ){
-            len_shft = len_shft + static_cast<uint16_t>( zipfile->read( len_nbit ) );
-         }
-
-         uint16_t dist_code = __get_sym__( zipfile, tree_dist );
-         uint16_t dist_shft = add_dist[ dist_code ];
-         uint16_t dist_nbit = bit_dist[ dist_code ];
-         if ( dist_nbit > 0 ){
-            dist_shft = dist_shft + static_cast<uint16_t>( zipfile->read( dist_nbit ) );
-         }
-
-         llen_pack[ wr_current ] = len_shft;
-         dist_pack[ wr_current ] = dist_shft;
-         wr_current += 1;
-
-      }
-   }
-
-   if ( llen_code != ZSEB_LITLEN ){
-      assert( wr_current == maxsize_pack );
-      return true;
-   }
-
-   return false;
-
+            llen_pack.push_back(len_shft);
+            dist_pack.push_back(dis_shft);
+        }
+    }
 }
 
 void zseb::huffman::pack( stream * zipfile, uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size ){

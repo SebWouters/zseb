@@ -342,29 +342,24 @@ void unzip(const std::string& smallfile, std::string& bigfile, const bool name, 
     std::ofstream origfile;
     origfile.open(bigfile.c_str(), std::ios::out|std::ios::binary|std::ios::trunc );
 
+    uint32_t checksum  = 0;
+    uint64_t size_lzss = 0;
     uint64_t size_zlib = zipfile->getpos(); // Preamble are full Bytes
-    uint32_t wr_current = 0;
 
     uint32_t last_block = 0;
-    uint32_t block_form;
 
-    //struct timeval start, end;
     uint64_t time_lzss = 0.0;
     uint64_t time_huff = 0.0;
 
-    char     * frame     = new char[DISK_TRIGGER + FRAME_EXTRA];
-    uint8_t  * llen_pack = new uint8_t[ZSEB_ARRAY_SIZE];
-    uint16_t * dist_pack = new uint16_t[ZSEB_ARRAY_SIZE];
-    huffman  * coder     = new huffman();
-
-    uint32_t checksum   = 0;
-    uint32_t rd_current = 0;
-    uint64_t size_lzss  = 0;
+    std::vector<char> frame; frame.reserve(DISK_TRIGGER + FRAME_EXTRA);
+    std::vector<uint8_t>  llen_pack; llen_pack.reserve(ZSEB_ARRAY_SIZE);
+    std::vector<uint16_t> dist_pack; dist_pack.reserve(ZSEB_ARRAY_SIZE);
+    huffman * coder = new huffman();
 
     while (last_block == 0)
     {
         last_block = zipfile->read(1);
-        block_form = zipfile->read(2); // '10'_b dyn trees, '01'_b fixed trees, '00'_b uncompressed, '11'_b error
+        uint32_t block_form = zipfile->read(2); // '10'_b dyn trees, '01'_b fixed trees, '00'_b uncompressed, '11'_b error
         if (block_form == 3)
         {
             std::cerr << "zseb: X11 is not a valid block mode." << std::endl;
@@ -384,18 +379,16 @@ void unzip(const std::string& smallfile, std::string& bigfile, const bool name, 
                 exit(255);
             }
 
-            const uint32_t write_size = LEN > lz77::HIST_SIZE ? rd_current : std::max(rd_current + LEN, lz77::HIST_SIZE) - lz77::HIST_SIZE;
+            const uint32_t write_size = LEN > lz77::HIST_SIZE ? static_cast<uint32_t>(frame.size()) : std::max(static_cast<uint32_t>(frame.size()) + LEN, lz77::HIST_SIZE) - lz77::HIST_SIZE;
             if (write_size != 0)
             {
-                assert(rd_current >= write_size);
-                origfile.write(frame, write_size);
-                checksum = crc32::update(checksum, frame, write_size);
-                for (uint32_t cnt = 0; cnt < rd_current - write_size; ++cnt)
-                    frame[cnt] = frame[write_size + cnt];
-                rd_current -= write_size;
+                assert(frame.size() >= write_size);
+                origfile.write(&frame[0], write_size);
+                checksum = crc32::update(checksum, &frame[0], write_size);
+                frame.erase(frame.begin(), frame.begin() + write_size);
             }
-            zipfile->read(frame + rd_current, LEN);
-            rd_current += LEN;
+            frame.insert(frame.end(), LEN, 0);
+            zipfile->read(&frame[frame.size() - LEN], LEN);
         }
         else
         {
@@ -404,55 +397,40 @@ void unzip(const std::string& smallfile, std::string& bigfile, const bool name, 
                 coder->load_tree(zipfile);
             else // Fixed trees
                 coder->fixed_tree('I');
+
+            coder->unpack(zipfile, llen_pack, dist_pack);
             auto end = std::chrono::steady_clock::now();
             time_huff += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 
-            bool remain = true;
-            while (remain)
+            if (llen_pack.size() != 0)
             {
                 start = std::chrono::steady_clock::now();
-                remain = coder->unpack(zipfile, llen_pack, dist_pack, wr_current, ZSEB_ARRAY_SIZE);
-                end = std::chrono::steady_clock::now();
-                time_huff += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-
-                if (wr_current != 0)
+                for (size_t idx = 0; idx != llen_pack.size(); ++idx)
                 {
-                    start = std::chrono::steady_clock::now();
-                    uint32_t idx_pack = 0;
-                    while (idx_pack != wr_current)
-                    {
-                        std::tuple<uint32_t, uint32_t, uint32_t> result = zseb::lz77::inflate(frame, rd_current, DISK_TRIGGER, llen_pack, dist_pack, idx_pack, wr_current);
-                        rd_current = std::get<0>(result);
-                        idx_pack   = std::get<1>(result);
-                        size_lzss += std::get<2>(result);
+                    size_lzss += lz77::inflate(frame, llen_pack[idx], dist_pack[idx]);
 
-                        if (rd_current >= DISK_TRIGGER)
-                        {
-                            origfile.write(frame, BATCH_SIZE);
-                            checksum = crc32::update(checksum, frame, BATCH_SIZE);
-                            assert(rd_current <= 2 * BATCH_SIZE); // Requirement for std::copy (which does not allow overlapping pieces)
-                            std::copy(frame + BATCH_SIZE, frame + rd_current, frame);
-                            rd_current -= BATCH_SIZE;
-                        }
+                    if (frame.size() >= DISK_TRIGGER)
+                    {
+                        origfile.write(&frame[0], BATCH_SIZE);
+                        checksum = crc32::update(checksum, &frame[0], BATCH_SIZE);
+                        frame.erase(frame.begin(), frame.begin() + BATCH_SIZE);
                     }
-                    end = std::chrono::steady_clock::now();
-                    time_lzss += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
                 }
-                wr_current = 0;
+                llen_pack.clear();
+                dist_pack.clear();
+                end = std::chrono::steady_clock::now();
+                time_lzss += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
             }
         }
     }
 
     // Flush
-    origfile.write(frame, rd_current);
-    checksum = crc32::update(checksum, frame, rd_current);
-    rd_current = 0;
+    origfile.write(&frame[0], frame.size());
+    checksum = crc32::update(checksum, &frame[0], frame.size());
+    frame.clear();
     const uint64_t size_file = static_cast<uint64_t>(origfile.tellp());
 
     delete coder;
-    delete [] frame;
-    delete [] llen_pack;
-    delete [] dist_pack;
     if (origfile.is_open()){ origfile.close(); }
 
     zipfile->nextbyte();
@@ -474,7 +452,7 @@ void unzip(const std::string& smallfile, std::string& bigfile, const bool name, 
     if (isize != isize_read)
     {
         std::cerr << "zseb: Computed ISIZE = " << isize << " is different from read-in ISIZE = " << isize_read << "." << std::endl;
-        exit( 255 );
+        exit(255);
     }
 
     delete zipfile;

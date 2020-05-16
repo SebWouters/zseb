@@ -22,6 +22,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <vector>
 
 #include "dtypes.h"
 #include "stream.h"
@@ -68,7 +69,7 @@ namespace zseb{
 
          void pack( stream * zipfile, uint8_t * llen_pack, uint16_t * dist_pack, const uint32_t size );
 
-         bool unpack( stream * zipfile, uint8_t * llen_pack, uint16_t * dist_pack, uint32_t &wr_current, const uint32_t maxsize_pack );
+         void unpack(stream * zipfile, std::vector<uint8_t>& llen_pack, std::vector<uint16_t>& dist_pack);
 
          /***  Get sizes of fixed / dynamic trees  ***/
 

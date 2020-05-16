@@ -24,6 +24,7 @@
 #include <utility>   // std::pair
 #include <algorithm> // std::min
 #include <tuple>     // std::tuple
+#include <vector>
 
 namespace zseb
 {
@@ -192,33 +193,21 @@ constexpr std::pair<uint32_t, uint32_t> deflate(const char * window, uint32_t cu
 }
 
 
-constexpr std::tuple<uint32_t, uint32_t, uint32_t> inflate(char * window, uint32_t current, const uint32_t limit, const uint8_t * llen_pack, const uint16_t * dist_pack, uint32_t idx_pack, const uint32_t size_pack) noexcept
+inline uint64_t inflate(std::vector<char>& frame, const uint8_t llen_code, const uint16_t dist_code) noexcept
 {
-    uint32_t lzss = 0;
-
-    while (idx_pack != size_pack) //for (uint32_t idx = idx_pack; idx < size_pack; ++idx)
+    if (dist_code == UINT16_MAX)
     {
-        if (dist_pack[idx_pack] == UINT16_MAX) // literal
-        {
-            lzss += CHAR_BIT + 1; // 1-bit differentiator
-            window[current] = static_cast<char>(llen_pack[idx_pack]);
-            ++current;
-        }
-        else // (length, distance)
-        {
-            lzss += HIST_BITS + CHAR_BIT + 1; // 1-bit differentiator
-            const uint16_t distance = dist_pack[idx_pack] + DIS_SHIFT;
-            const uint16_t length   = llen_pack[idx_pack] + LEN_SHIFT;
-            for (uint32_t cnt = 0U; cnt < length; ++cnt)
-                window[current + cnt] = window[current - distance + cnt];
-            current += length;
-        }
-        ++idx_pack;
-
-        if (current >= limit)
-            return { current, idx_pack, lzss };
+        frame.push_back(static_cast<char>(llen_code));
+        return CHAR_BIT + 1;
     }
-    return { current, size_pack, lzss };
+    else
+    {
+        const uint16_t distance = dist_code + DIS_SHIFT;
+        const uint16_t length   = llen_code + LEN_SHIFT;
+        for (uint32_t cnt = 0; cnt < length; ++cnt)
+            frame.push_back(*(frame.end() - distance));
+        return HIST_BITS + CHAR_BIT + 1;
+    }
 }
 
 
